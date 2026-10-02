@@ -2,10 +2,9 @@
 
 Turns raw HTML into structured rows (list of dicts).
 
-Three modes:
+Two modes:
 1. Selector mode — you define CSS selectors for each field.
 2. Table auto mode — detects the largest <table>.
-3. List auto mode — detects repeated sibling structures.
 
 Usage:
     from chronicle.parse import parse_html
@@ -126,47 +125,3 @@ def detect_tables(html: str) -> list[dict[str, Any]]:
         data.append(dict(zip(headers, values)))
 
     return data
-
-
-def detect_lists(html: str, min_items: int = 5) -> list[dict[str, Any]]:
-    """Auto-detect a repeating list of similar DOM elements.
-
-    Looks for parent elements whose direct children have similar
-    tag names + class names. The largest such group is returned
-    as rows, with each unique class name becoming a column.
-
-    Simple heuristic — good for product grids, news lists, etc.
-    """
-    tree = HTMLParser(html)
-    best_children: list = []
-
-    for parent in tree.css("*"):
-        children = parent.css(":scope > *")
-        if len(children) < min_items:
-            continue
-        fingerprints: dict[str, list] = {}
-        for child in children:
-            cls = (child.attributes.get("class") or "").split()
-            key = f"{child.tag}.{cls[0] if cls else ''}"
-            fingerprints.setdefault(key, []).append(child)
-        for group in fingerprints.values():
-            if len(group) > len(best_children):
-                best_children = group
-
-    if not best_children:
-        return []
-
-    rows: list[dict[str, Any]] = []
-    for child in best_children:
-        row: dict[str, Any] = {}
-        for desc in child.css("*"):
-            cls = (desc.attributes.get("class") or "").split()
-            if not cls:
-                continue
-            key = f"{desc.tag}.{cls[0]}"
-            text = desc.text(strip=True)
-            if text and key not in row:
-                row[key] = text
-        if row:
-            rows.append(row)
-    return rows

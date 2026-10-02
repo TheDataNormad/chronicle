@@ -18,7 +18,7 @@ from chronicle.drift import DriftReport, detect_drift
 from chronicle.exceptions import ScrapeError
 from chronicle.fetch import Fetcher
 from chronicle.normalize import NormalizeResult, normalize_rows
-from chronicle.parse import detect_lists, detect_tables, parse_html
+from chronicle.parse import detect_tables, parse_html
 from chronicle.profile import generate_profile
 from chronicle.storage import Storage
 
@@ -68,7 +68,7 @@ class ScrapeResult:
         return bool(self.drift_report and self.drift_report.has_drift)
 
     def summary(self) -> dict[str, Any]:
-        summary = {
+        return {
             "url": self.url,
             "pages_requested": self.pages_requested,
             "pages_succeeded": self.pages_succeeded,
@@ -92,7 +92,6 @@ class ScrapeResult:
                 self.drift_report.severity if self.drift_report else None
             ),
         }
-        return summary
 
     def __repr__(self) -> str:
         s = self.summary()
@@ -162,7 +161,6 @@ class Scrape:
             strict=self.strict,
         )
 
-        # ----- profile + storage + drift -----
         if self.store and self._storage is not None:
             self._post_process(result, raw_pages)
 
@@ -180,14 +178,11 @@ class Scrape:
         invalid_df = result.to_invalid_dataframe()
         project_id = self._storage.project_id_for(self.url)
 
-        # Generate profile
         profile = generate_profile(df) if not df.empty else None
 
-        # Load baseline (if any)
         baseline = self._storage.load_baseline(project_id)
         result.is_first_run = baseline is None
 
-        # Save the run
         try:
             manifest = self._storage.save_run(
                 url=self.url,
@@ -210,7 +205,6 @@ class Scrape:
             result.errors.append(f"storage: {type(e).__name__}: {e}")
             return
 
-        # First run: set baseline. Subsequent: detect drift.
         if baseline is None:
             if profile is not None:
                 self._storage.save_baseline(project_id, profile)
@@ -236,12 +230,7 @@ class Scrape:
                 selectors=field_selectors,
                 base_url=self.url,
             )
-
-        # Auto mode: try table first, then list heuristic
-        rows = detect_tables(html)
-        if rows:
-            return rows
-        return detect_lists(html)
+        return detect_tables(html)
 
     def _page_url(self, page: int) -> str:
         if page == 1:
