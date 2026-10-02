@@ -1,14 +1,14 @@
 [project]
 name = "chronicle-ds"
-version = "0.1.0"
+version = "0.1.1"
 description = "The web scraping library that remembers — DS-native data acquisition with temporal versioning and drift detection."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [
-    { name = "Benedict Chidiebere", email = "benedict.c.works@gmail.com" }
+    { name = "Benedict Chidiebere", email = "chidieberebenedict48@gmail.com" }
 ]
-keywords = ["web scraping", "data science", "drift detection", "data quality", "pandas"]
+keywords = ["web scraping", "data science", "drift detection", "data quality", "pandas", "monitoring"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

@@ -53,6 +53,11 @@ df = Scrape("https://example.com/products").to_dataframe()
 print(df.head())
 ```
 
+> **Note on auto-detection:** The one-liner works best on pages with
+> HTML `<table>` elements or simple repeated list structures. It can
+> pick the wrong structure on pages with navigation chrome (news sites,
+> SPAs). For those, pass `selectors={...}` — see "More Control" below.
+
 ## More Control
 
 ```python
@@ -116,12 +121,15 @@ if result.drift_detected:
 
 ### What's built
 - [x] HTTP layer (`fetch.py`) — retries, rate limiting, caching
-- [ ] HTML parsing (`parse.py`)
-- [ ] Schema validation (`normalize.py`)
-- [ ] `Scrape` class (`core.py`)
-- [ ] Storage + versioning (`storage.py`)
-- [ ] Profile generator (`profile.py`)
-- [ ] Drift detection (`drift.py`)
+- [x] HTML parsing (`parse.py`) — selector + auto table/list detection
+- [x] Schema validation (`normalize.py`) — pydantic + quality reports
+- [x] `Scrape` class (`core.py`) — one-line API
+- [x] Storage + versioning (`storage.py`) — versioned artifacts + SQLite
+- [x] Profile generation (`profile.py`) — statistical fingerprints
+- [x] Drift detection (`drift.py`) — null / distribution / range / schema
+- [x] CLI (`cli.py`) — version, scrape, runs commands
+- [x] 18 passing unit tests
+- [x] Published to PyPI as `chronicle-ds`
 
 ### Roadmap
 - Data contracts (schema + quality guarantees)

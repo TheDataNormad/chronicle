@@ -18,7 +18,7 @@ from chronicle.drift import DriftReport, detect_drift
 from chronicle.exceptions import ScrapeError
 from chronicle.fetch import Fetcher
 from chronicle.normalize import NormalizeResult, normalize_rows
-from chronicle.parse import detect_tables, parse_html
+from chronicle.parse import detect_lists, detect_tables, parse_html
 from chronicle.profile import generate_profile
 from chronicle.storage import Storage
 
@@ -236,7 +236,12 @@ class Scrape:
                 selectors=field_selectors,
                 base_url=self.url,
             )
-        return detect_tables(html)
+
+        # Auto mode: try table first, then list heuristic
+        rows = detect_tables(html)
+        if rows:
+            return rows
+        return detect_lists(html)
 
     def _page_url(self, page: int) -> str:
         if page == 1:
