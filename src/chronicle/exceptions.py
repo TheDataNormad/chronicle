@@ -5,6 +5,10 @@ class ChronicleError(Exception):
     """Base exception for all Chronicle errors."""
 
 
+class ScrapeError(ChronicleError):
+    """Raised when the scrape orchestration fails."""
+
+
 class FetchError(ChronicleError):
     """Raised when an HTTP request fails after all retries."""
 
