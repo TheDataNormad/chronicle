@@ -27,13 +27,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 import pandas as pd
 from pydantic import BaseModel, ValidationError
 
 from chronicle.exceptions import SchemaError
-
 
 # ---------------------------------------------------------------- coercion
 
@@ -43,7 +42,7 @@ _TRUE_VALUES = {"true", "yes", "y", "1", "t"}
 _FALSE_VALUES = {"false", "no", "n", "0", "f"}
 
 
-def coerce_to_float(value: Any) -> Optional[float]:
+def coerce_to_float(value: Any) -> float | None:
     """Coerce '$1,234.56' or '45%' to a float. Returns None if not numeric."""
     if value is None:
         return None
@@ -61,7 +60,7 @@ def coerce_to_float(value: Any) -> Optional[float]:
         return None
 
 
-def coerce_to_int(value: Any) -> Optional[int]:
+def coerce_to_int(value: Any) -> int | None:
     f = coerce_to_float(value)
     if f is None:
         return None
@@ -71,7 +70,7 @@ def coerce_to_int(value: Any) -> Optional[int]:
         return None
 
 
-def coerce_to_bool(value: Any) -> Optional[bool]:
+def coerce_to_bool(value: Any) -> bool | None:
     if value is None:
         return None
     if isinstance(value, bool):
@@ -108,7 +107,7 @@ class NormalizeResult:
 
     valid_rows: list[dict[str, Any]] = field(default_factory=list)
     invalid_rows: list[dict[str, Any]] = field(default_factory=list)
-    schema: Optional[type[BaseModel]] = None
+    schema: type[BaseModel] | None = None
     columns: list[str] = field(default_factory=list)
 
     @property
@@ -167,7 +166,7 @@ class NormalizeResult:
 
 def normalize_rows(
     rows: list[dict[str, Any]],
-    schema: Optional[type[BaseModel]] = None,
+    schema: type[BaseModel] | None = None,
     strict: bool = False,
 ) -> NormalizeResult:
     """Normalize and validate parsed rows.

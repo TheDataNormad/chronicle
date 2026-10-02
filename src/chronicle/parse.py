@@ -18,7 +18,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urljoin
 
 from selectolax.parser import HTMLParser
@@ -30,7 +30,7 @@ def parse_html(
     html: str,
     container: str,
     selectors: dict[str, str],
-    base_url: Optional[str] = None,
+    base_url: str | None = None,
 ) -> list[dict[str, Any]]:
     """Parse HTML into a list of row dicts.
 
@@ -68,7 +68,7 @@ def parse_html(
     return rows
 
 
-def _extract_field(node, selector: str, base_url: Optional[str]) -> Any:
+def _extract_field(node, selector: str, base_url: str | None) -> Any:
     """Extract a single field from a node using a CSS selector.
 
     Special syntax:

@@ -12,11 +12,10 @@ Severity levels:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 from scipy import stats
-
 
 # ---------------------------------------------------------------- thresholds
 
@@ -41,7 +40,7 @@ class DriftFinding:
     message: str
     baseline_value: Any = None
     current_value: Any = None
-    delta: Optional[float] = None
+    delta: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {

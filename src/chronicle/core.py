@@ -9,7 +9,7 @@ Every run is versioned, profiled, and compared to a baseline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 from pydantic import BaseModel
@@ -32,11 +32,11 @@ class ScrapeResult:
     pages_succeeded: int = 0
     pages_failed: int = 0
     rows_scraped: int = 0
-    normalize_result: Optional[NormalizeResult] = None
+    normalize_result: NormalizeResult | None = None
     errors: list[str] = field(default_factory=list)
-    drift_report: Optional[DriftReport] = None
-    manifest: Optional[dict[str, Any]] = None
-    baseline_used: Optional[str] = None
+    drift_report: DriftReport | None = None
+    manifest: dict[str, Any] | None = None
+    baseline_used: str | None = None
     is_first_run: bool = False
 
     # ---------- data access ----------
@@ -111,15 +111,15 @@ class Scrape:
     def __init__(
         self,
         url: str,
-        selectors: Optional[dict[str, str]] = None,
-        schema: Optional[type[BaseModel]] = None,
+        selectors: dict[str, str] | None = None,
+        schema: type[BaseModel] | None = None,
         pages: int = 1,
         rate_limit: float = 1.0,
         strict: bool = False,
         use_cache: bool = True,
         store: bool = True,
         detect_drift: bool = True,
-        storage_root: Optional[str] = None,
+        storage_root: str | None = None,
     ) -> None:
         self.url = url
         self.selectors = selectors or {}
@@ -241,7 +241,7 @@ class Scrape:
     def close(self) -> None:
         self._fetcher.close()
 
-    def __enter__(self) -> "Scrape":
+    def __enter__(self) -> Scrape:
         return self
 
     def __exit__(self, *args) -> None:

@@ -1,5 +1,6 @@
 """Tests for chronicle.normalize."""
 
+import pytest
 from pydantic import BaseModel
 
 from chronicle.normalize import (
@@ -19,9 +20,9 @@ class Product(BaseModel):
 # ---- coercion ----
 
 def test_coerce_float_handles_currency():
-    assert coerce_to_float("$1,234.56") == 1234.56
-    assert coerce_to_float("45%") == 45.0
-    assert coerce_to_float("12") == 12.0
+    assert coerce_to_float("$1,234.56") == pytest.approx(1234.56)
+    assert coerce_to_float("45%") == pytest.approx(45.0)
+    assert coerce_to_float("12") == pytest.approx(12.0)
 
 
 def test_coerce_float_handles_nulls():
@@ -55,7 +56,7 @@ def test_normalize_with_schema_splits_valid_and_invalid():
     result = normalize_rows(rows, schema=Product)
     assert len(result.valid_rows) == 2
     assert len(result.invalid_rows) == 1
-    assert result.valid_rows[0]["price"] == 1234.56
+    assert result.valid_rows[0]["price"] == pytest.approx(1234.56)
     assert result.valid_rows[1]["rating"] is None
 
 
@@ -68,14 +69,14 @@ def test_normalize_quality_report_shape():
     report = result.quality_report()
     assert report["rows_total"] == 2
     assert report["rows_valid"] == 2
-    assert report["success_rate"] == 1.0
+    assert report["success_rate"] == pytest.approx(1.0)
     assert "price" in report["columns"]
-    assert report["columns"]["price"]["mean"] == 15.0
+    assert report["columns"]["price"]["mean"] == pytest.approx(15.0)
 
 
 def test_normalize_no_schema_infers_types():
     rows = [{"a": "42", "b": "3.14", "c": "hello"}]
     result = normalize_rows(rows)
     assert result.valid_rows[0]["a"] == 42
-    assert result.valid_rows[0]["b"] == 3.14
+    assert result.valid_rows[0]["b"] == pytest.approx(3.14)
     assert result.valid_rows[0]["c"] == "hello"

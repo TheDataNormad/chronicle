@@ -13,12 +13,10 @@ from __future__ import annotations
 import hashlib
 import time
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
 from chronicle.exceptions import FetchError
-
 
 DEFAULT_USER_AGENT = "chronicle/0.1.0 (+https://github.com/TheDataNormad/chronicle)"
 DEFAULT_TIMEOUT = 15.0
@@ -62,7 +60,7 @@ class Fetcher:
         backoff: float = 0.5,
         timeout: float = DEFAULT_TIMEOUT,
         user_agent: str = DEFAULT_USER_AGENT,
-        cache_dir: Optional[Path] = None,
+        cache_dir: Path | None = None,
         use_cache: bool = True,
     ) -> None:
         self.rate_limiter = RateLimiter(rate_limit)
@@ -91,7 +89,7 @@ class Fetcher:
         return html
 
     def _request_with_retries(self, url: str) -> str:
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(1, self.retries + 1):
             self.rate_limiter.wait()
@@ -123,7 +121,7 @@ class Fetcher:
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
         return self.cache_dir / f"{digest}.html"
 
-    def _read_cache(self, url: str) -> Optional[str]:
+    def _read_cache(self, url: str) -> str | None:
         path = self._cache_path(url)
         if path.exists():
             return path.read_text(encoding="utf-8")
@@ -144,7 +142,7 @@ class Fetcher:
         """Close the underlying HTTP client."""
         self._client.close()
 
-    def __enter__(self) -> "Fetcher":
+    def __enter__(self) -> Fetcher:
         return self
 
     def __exit__(self, *args) -> None:

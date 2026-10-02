@@ -59,6 +59,13 @@ packages = ["src/chronicle"]
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.lint]
+ignore = [
+    "B008",     # typer.Option in argument defaults is idiomatic
+    "BLE001",   # we intentionally catch broad Exception in scrape loops
+    "PYI034",   # Self type requires Python 3.11+
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --cov=chronicle --cov-report=term-missing"

@@ -26,8 +26,8 @@ def generate_profile(df: pd.DataFrame) -> dict[str, Any]:
         A nested dict with row/column counts and per-column stats.
     """
     profile: dict[str, Any] = {
-        "row_count": int(len(df)),
-        "column_count": int(len(df.columns)),
+        "row_count": len(df),
+        "column_count": len(df.columns),
         "columns": {},
     }
 

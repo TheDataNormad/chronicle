@@ -24,7 +24,7 @@ import sqlite3
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -73,14 +73,14 @@ class RunManifest:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "RunManifest":
+    def from_dict(cls, data: dict[str, Any]) -> RunManifest:
         return cls(**data)
 
 
 class Storage:
     """Manages the .chronicle/ directory and run artifacts."""
 
-    def __init__(self, root: Optional[Path] = None) -> None:
+    def __init__(self, root: Path | None = None) -> None:
         self.root = Path(root) if root else DEFAULT_ROOT
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "projects").mkdir(exist_ok=True)
@@ -163,14 +163,14 @@ class Storage:
         self,
         url: str,
         data: pd.DataFrame,
-        invalid: Optional[pd.DataFrame] = None,
-        profile: Optional[dict[str, Any]] = None,
-        raw_pages: Optional[list[str]] = None,
-        config: Optional[dict[str, Any]] = None,
+        invalid: pd.DataFrame | None = None,
+        profile: dict[str, Any] | None = None,
+        raw_pages: list[str] | None = None,
+        config: dict[str, Any] | None = None,
         pages_requested: int = 0,
         pages_succeeded: int = 0,
         pages_failed: int = 0,
-        errors: Optional[list[str]] = None,
+        errors: list[str] | None = None,
         chronicle_version: str = "0.1.0",
     ) -> RunManifest:
         """Persist a scrape run to disk and index it."""
@@ -248,8 +248,8 @@ class Storage:
 
     def list_runs(
         self,
-        url: Optional[str] = None,
-        project_id: Optional[str] = None,
+        url: str | None = None,
+        project_id: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         """List runs, newest first."""
@@ -269,7 +269,7 @@ class Storage:
             rows = [dict(r) for r in conn.execute(query, params).fetchall()]
         return rows
 
-    def latest_run(self, url: str) -> Optional[dict[str, Any]]:
+    def latest_run(self, url: str) -> dict[str, Any] | None:
         runs = self.list_runs(url=url, limit=1)
         return runs[0] if runs else None
 
@@ -281,7 +281,7 @@ class Storage:
             encoding="utf-8",
         )
 
-    def load_baseline(self, project_id: str) -> Optional[dict[str, Any]]:
+    def load_baseline(self, project_id: str) -> dict[str, Any] | None:
         path = self.baseline_path(project_id)
         if not path.exists():
             return None
