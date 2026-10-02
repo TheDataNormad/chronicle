@@ -26,6 +26,7 @@ Usage:
 from __future__ import annotations
 
 import re
+import types
 from dataclasses import dataclass, field
 from typing import Any, Union, get_args, get_origin
 
@@ -238,9 +239,17 @@ def _extract_field_types(schema: type[BaseModel]) -> dict[str, type]:
 
 
 def _unwrap_optional(annotation: Any) -> type:
-    """Return X from Optional[X] or Union[X, None]. Otherwise return annotation."""
+    """Return X from Optional[X] or Union[X, None].
+
+    Handles both typing.Union (from Optional[X]) and types.UnionType
+    (from PEP 604 `X | None` syntax on Python 3.10+).
+
+    On Python 3.10+, `get_origin(float | None)` returns `types.UnionType`,
+    NOT `typing.Union`. This distinction matters when running across
+    multiple Python versions in CI.
+    """
     origin = get_origin(annotation)
-    if origin is Union:
+    if origin is Union or origin is types.UnionType:
         args = [a for a in get_args(annotation) if a is not type(None)]
         if args:
             return args[0]
