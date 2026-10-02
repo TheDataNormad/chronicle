@@ -4,6 +4,7 @@
 
 Chronicle is a data-science-native web scraping framework with **temporal versioning** and **drift detection** built in. Every scrape is stored, profiled, and compared to history — so you know exactly when your data changes and why.
 
+[![tests](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml/badge.svg)](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml)
 [![PyPI version](https://img.shields.io/badge/pypi-v0.1.0-blue.svg)](https://pypi.org/project/chronicle-ds/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
