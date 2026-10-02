@@ -20,7 +20,7 @@ import httpx
 from chronicle.exceptions import FetchError
 
 
-DEFAULT_USER_AGENT = "chronicle/0.1.0 (+https://github.com/TheDataNomad/chronicle)"
+DEFAULT_USER_AGENT = "chronicle/0.1.0 (+https://github.com/TheDataNormad/chronicle)"
 DEFAULT_TIMEOUT = 15.0
 DEFAULT_CACHE_DIR = Path.home() / ".chronicle" / "cache"
 
