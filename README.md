@@ -114,6 +114,27 @@ result = Scrape(
     wait_for="div.quote",   # wait for this selector before parsing
 ).run()
 ```
+> **Colab / Jupyter note:** Playwright's sync API cannot run inside a live
+> asyncio loop, which Jupyter and Colab both have. On those platforms,
+> run your Playwright scrape inside a separate thread:
+>
+> ```python
+> import threading
+>
+> result = {}
+> def run():
+>     result["r"] = Scrape(
+>         url="https://quotes.toscrape.com/js/",
+>         selectors={"_container": "div.quote", "text": "span.text"},
+>         use_playwright=True,
+>         wait_for="div.quote",
+>     ).run()
+>
+> t = threading.Thread(target=run)
+> t.start()
+> t.join()
+> df = result["r"].to_dataframe()
+> ```
 
 **Key parameters:**
 
