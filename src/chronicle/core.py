@@ -120,6 +120,10 @@ class Scrape:
         store: bool = True,
         detect_drift: bool = True,
         storage_root: str | None = None,
+        use_playwright: bool = False,
+        wait_for: str | None = None,
+        wait_until: str = "domcontentloaded",
+        cookies: list[dict] | None = None,
     ) -> None:
         self.url = url
         self.selectors = selectors or {}
@@ -130,7 +134,21 @@ class Scrape:
         self.use_cache = use_cache
         self.store = store
         self.detect_drift = detect_drift
-        self._fetcher = Fetcher(rate_limit=rate_limit, use_cache=use_cache)
+        self.use_playwright = use_playwright
+
+        if use_playwright:
+            # Imported locally so non-Playwright users don't pay the import cost
+            from chronicle.playwright_fetcher import PlaywrightFetcher
+            self._fetcher = PlaywrightFetcher(
+                rate_limit=rate_limit,
+                use_cache=use_cache,
+                wait_for=wait_for,
+                wait_until=wait_until,
+                cookies=cookies,
+            )
+        else:
+            self._fetcher = Fetcher(rate_limit=rate_limit, use_cache=use_cache)
+
         self._storage = Storage(root=storage_root) if store else None
 
     # ---------- public API ----------
@@ -194,6 +212,7 @@ class Scrape:
                     "selectors": self.selectors,
                     "pages": self.pages,
                     "schema": self.schema.__name__ if self.schema else None,
+                    "use_playwright": self.use_playwright,
                 },
                 pages_requested=result.pages_requested,
                 pages_succeeded=result.pages_succeeded,

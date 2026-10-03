@@ -5,7 +5,7 @@
 Chronicle is a data-science-native web scraping framework with **temporal versioning** and **drift detection** built in. Every scrape is stored, profiled, and compared to history — so you know exactly when your data changes and why.
 
 [![tests](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml/badge.svg)](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml)
-[![PyPI version](https://img.shields.io/badge/pypi-v0.1.2-blue.svg)](https://pypi.org/project/chronicle-ds/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.2.0-blue.svg)](https://pypi.org/project/chronicle-ds/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
@@ -31,6 +31,7 @@ Chronicle sits **on top of** these tools and adds the layer data scientists actu
 - 📊 **DataFrame-native** — one line from URL to analysis-ready data
 - 📜 **Reproducible** — every run produces a self-contained artifact
 - ✅ **Schema validation** — data quality enforced at scrape time
+- 🌐 **Two fetchers** — fast HTTP for static pages, headless Chromium for JS-rendered SPAs
 - 🧠 **DS-first design** — built for Jupyter, pandas, and real pipelines
 
 ---
@@ -42,6 +43,13 @@ pip install chronicle-ds
 ```
 
 Chronicle requires **Python 3.10+**.
+
+For JS-rendered pages (Playwright):
+
+```bash
+pip install "chronicle-ds[browser]"
+playwright install chromium
+```
 
 ---
 
@@ -85,6 +93,40 @@ result = Scrape(
 df = result.to_dataframe()
 print(df.head())
 ```
+
+## JS-rendered pages
+
+Modern sites build pages client-side — a plain HTTP fetch gets you an empty
+shell. Chronicle ships a Playwright-based fetcher that launches headless
+Chromium, waits for the content to actually render, and returns the final HTML.
+
+```python
+from chronicle import Scrape
+
+result = Scrape(
+    url="https://quotes.toscrape.com/js/",
+    selectors={
+        "_container": "div.quote",
+        "text":   "span.text",
+        "author": "small.author",
+    },
+    use_playwright=True,
+    wait_for="div.quote",   # wait for this selector before parsing
+).run()
+```
+
+**Key parameters:**
+
+| Parameter | What it does |
+|-----------|--------------|
+| `use_playwright=True` | Use headless Chromium instead of httpx |
+| `wait_for="<css>"` | Wait for a selector to appear before parsing |
+| `wait_until` | `"domcontentloaded"` (default), `"load"`, or `"networkidle"` |
+| `cookies=[...]` | Pre-set cookies (useful for skipping consent walls) |
+
+**Known limitations:** Some sites (YouTube, Twitter, LinkedIn) actively detect
+headless browsers and serve reduced content. For those, use their official
+APIs. Chronicle is honest about what it can and can't do.
 
 ---
 
@@ -177,10 +219,11 @@ print(result.to_invalid_dataframe().head())   # rows that failed
 
 ## Status
 
-🚧 **Alpha — v0.1.2.** Actively developed. APIs may shift before v1.0.
+🚧 **Alpha — v0.2.0.** Actively developed. APIs may shift before v1.0.
 
 ### What's built
 - [x] HTTP layer (`fetch.py`) — retries, exponential backoff, rate limiting, file cache
+- [x] Playwright fetcher (`playwright_fetcher.py`) — headless Chromium for JS-rendered pages
 - [x] HTML parsing (`parse.py`) — selector mode + auto table detection
 - [x] Schema validation (`normalize.py`) — pydantic-based, quarantines invalid rows
 - [x] `Scrape` class (`core.py`) — one-line API, pagination, `ScrapeResult`
@@ -192,11 +235,11 @@ print(result.to_invalid_dataframe().head())   # rows that failed
 - [x] Published to PyPI as `chronicle-ds`
 
 ### Roadmap
-- **Playwright support** — JS-rendered pages (YouTube, most modern SPAs)
 - **JSON API mode** — first-class handling of sites that serve data via internal JSON APIs
 - **History API** — `Scrape.history(url)` and `drift_timeline(url)` for time-series queries
 - **Data contracts** — declare "good data" (completeness, ranges, uniqueness) and fail the run when violated
 - **Self-healing selectors** — auto-detect broken selectors and suggest alternatives
+- **Playwright stealth** — evasion for sites that block headless browsers
 
 ---
 
@@ -226,3 +269,19 @@ MIT — see [LICENSE](LICENSE).
 
 Built by [@TheDataNormad](https://github.com/TheDataNormad).
 ```
+
+---
+
+## What changed (and why)
+
+| Change | Reason |
+|--------|--------|
+| Badge: `v0.1.2` → `v0.2.0` | Version bump for the release |
+| Added "Two fetchers" bullet | New core capability worth highlighting |
+| Install section: added `[browser]` extra | Users need to know how to enable Playwright |
+| New "JS-rendered pages" section | The killer new feature deserves top-level visibility |
+| Parameters table | Easier to scan than prose |
+| Honest limitations note | Sets correct expectations — no false promises |
+| Status: `v0.1.2` → `v0.2.0` | Accurate |
+| What's built: added Playwright fetcher | Truthful |
+| Roadmap: removed Playwright, added "Playwright stealth" | Playwright is done; stealth evasion is the next evolution |
