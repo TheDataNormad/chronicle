@@ -226,24 +226,3 @@ MIT — see [LICENSE](LICENSE).
 
 Built by [@TheDataNormad](https://github.com/TheDataNormad).
 ```
-
----
-
-## What changed (and why each change matters)
-
-| Change | Reason |
-|--------|--------|
-| Badge: `v0.1.0` → `v0.1.2` | Matches what's on PyPI |
-| "v0.1.0 in progress" → "Alpha — v0.1.2" | Truthful status |
-| Quickstart URL: `example.com/products` → real Wikipedia URL | The one-liner only works on tables — this example actually works |
-| Removed `Scrape.history()` and `drift_timeline()` examples | **Those methods don't exist yet.** Advertising fake APIs is the fastest way to lose user trust. Moved to roadmap. |
-| `result.drift_detected` → `result.has_drift()` | Correct API — it's a method, not a property |
-| `result.drift_report()` → `result.drift_report.pretty()` | `drift_report` is an attribute; `.pretty()` is the method that formats it |
-| "auto table/list detection" → "auto table detection" | We removed `detect_lists` in v0.1.1 |
-| Added real storage layout diagram | Shows people what `.chronicle/` actually contains |
-| Added quality report example | It's a built feature, should be visible |
-| Added schema validation example | Same reason |
-| Roadmap reordered by priority | Playwright + JSON API are the real next moves |
-| Contributing: added PowerShell activation | Windows users were getting stuck |
-
----
