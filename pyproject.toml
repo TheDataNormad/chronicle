@@ -64,6 +64,7 @@ ignore = [
     "B008",     # typer.Option in argument defaults is idiomatic
     "BLE001",   # we intentionally catch broad Exception in scrape loops
     "PYI034",   # Self type requires Python 3.11+
+    "S110",     # try/except/pass is intentional in cleanup code
 ]
 
 [tool.pytest.ini_options]

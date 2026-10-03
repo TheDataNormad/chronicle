@@ -32,7 +32,6 @@ from __future__ import annotations
 import hashlib
 import time
 from pathlib import Path
-from typing import Optional
 
 from chronicle.exceptions import FetchError
 from chronicle.fetch import DEFAULT_CACHE_DIR, DEFAULT_USER_AGENT, RateLimiter
@@ -50,13 +49,13 @@ class PlaywrightFetcher:
         rate_limit: float = 1.0,
         retries: int = 2,
         timeout: float = 30000.0,            # milliseconds (Playwright's unit)
-        wait_for: Optional[str] = None,      # CSS selector to wait for
+        wait_for: str | None = None,      # CSS selector to wait for
         wait_until: str = "domcontentloaded", # "load" | "domcontentloaded" | "networkidle"
         headless: bool = True,
         user_agent: str = DEFAULT_USER_AGENT,
-        cache_dir: Optional[Path] = None,
+        cache_dir: Path | None = None,
         use_cache: bool = True,
-        cookies: Optional[list[dict]] = None,  # pre-set cookies (e.g. consent bypass)
+        cookies: list[dict] | None = None,  # pre-set cookies (e.g. consent bypass)
     ) -> None:
         self.rate_limiter = RateLimiter(rate_limit)
         self.retries = retries
@@ -136,7 +135,7 @@ class PlaywrightFetcher:
                 pass
             self._playwright = None
 
-    def __enter__(self) -> "PlaywrightFetcher":
+    def __enter__(self) -> PlaywrightFetcher:
         return self
 
     def __exit__(self, *args) -> None:
@@ -160,7 +159,7 @@ class PlaywrightFetcher:
 
     def _fetch_with_retries(self, url: str) -> str:
         self._ensure_browser()
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(1, self.retries + 1):
             self.rate_limiter.wait()
@@ -193,7 +192,7 @@ class PlaywrightFetcher:
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
         return self.cache_dir / f"pw_{digest}.html"
 
-    def _read_cache(self, url: str) -> Optional[str]:
+    def _read_cache(self, url: str) -> str | None:
         path = self._cache_path(url)
         if path.exists():
             return path.read_text(encoding="utf-8")
