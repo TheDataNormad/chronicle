@@ -21,7 +21,14 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urljoin
 
-from selectolax.parser import HTMLParser
+# selectolax 1.x deprecated the "modest" backend (selectolax.parser)
+# in favor of lexbor. This try/except keeps Chronicle working on both.
+try:
+    # selectolax >= 1.0
+    from selectolax.lexbor import LexborHTMLParser as HTMLParser
+except ImportError:
+    # selectolax < 1.0
+    from selectolax.parser import HTMLParser
 
 from chronicle.exceptions import ParseError
 
