@@ -268,20 +268,3 @@ MIT — see [LICENSE](LICENSE).
 ## Author
 
 Built by [@TheDataNormad](https://github.com/TheDataNormad).
-```
-
----
-
-## What changed (and why)
-
-| Change | Reason |
-|--------|--------|
-| Badge: `v0.1.2` → `v0.2.0` | Version bump for the release |
-| Added "Two fetchers" bullet | New core capability worth highlighting |
-| Install section: added `[browser]` extra | Users need to know how to enable Playwright |
-| New "JS-rendered pages" section | The killer new feature deserves top-level visibility |
-| Parameters table | Easier to scan than prose |
-| Honest limitations note | Sets correct expectations — no false promises |
-| Status: `v0.1.2` → `v0.2.0` | Accurate |
-| What's built: added Playwright fetcher | Truthful |
-| Roadmap: removed Playwright, added "Playwright stealth" | Playwright is done; stealth evasion is the next evolution |
