@@ -1,6 +1,3 @@
-Here's the honest README. Replace the entire file. I've marked what changed at the bottom.
-
-```markdown
 # Chronicle
 
 > **The web scraping library that remembers.**
