@@ -1,8 +1,13 @@
+Here's the honest README. Replace the entire file. I've marked what changed at the bottom.
+
+```markdown
 # Chronicle
 
 > **The web scraping library that remembers.**
 
-Chronicle is a data-science-native web scraping framework with **temporal versioning** and **drift detection** built in. Every scrape is stored, profiled, and compared to history — so you know exactly when your data changes and why.
+Chronicle is a data-science-native web scraping framework that stores every run, profiles the result, and compares it to a baseline — so silent changes in a page's structure or content are visible before they poison a pipeline.
+
+**⚠️ Alpha software.** Chronicle is v0.2.0. Drift detection works for a specific set of checks (see [Limitations](#limitations-v020)). It does not yet catch every kind of change. Read the limitations section before relying on it.
 
 [![tests](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml/badge.svg)](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml)
 [![PyPI version](https://img.shields.io/badge/pypi-v0.2.0-blue.svg)](https://pypi.org/project/chronicle-ds/)
@@ -20,19 +25,17 @@ Existing scraping libraries hand you raw data and walk away. **Chronicle remembe
 |------|----------|------------------------|
 | Requests | HTTP requests | No parsing, no structure |
 | BeautifulSoup | HTML parsing | No fetching, no data quality |
-| Scrapy | Large-scale crawling | No drift detection, no reproducibility |
+| Scrapy | Large-scale crawling | No cross-run comparison, no reproducibility |
 | Selenium | JS-rendered pages | No data pipeline, no versioning |
 | lxml | Fast parsing | No fetching, no schema |
 
-Chronicle sits **on top of** these tools and adds the layer data scientists actually need:
+Chronicle sits **on top of** these tools and adds:
 
-- 🕐 **Temporal versioning** — every scrape is stored, versioned, and replayable
-- 🔍 **Drift detection** — catch broken selectors before they poison your pipeline
-- 📊 **DataFrame-native** — one line from URL to analysis-ready data
-- 📜 **Reproducible** — every run produces a self-contained artifact
-- ✅ **Schema validation** — data quality enforced at scrape time
+- 🕐 **Versioned runs** — every scrape is stored with raw HTML, parsed data, config, and a statistical profile
+- 🔍 **Drift detection** — compares each run to a baseline and flags schema, null, mean, and range changes
+- 📊 **DataFrame-native** — one line from URL to a pandas DataFrame
+- ✅ **Schema validation** — pydantic models coerce types and quarantine invalid rows instead of dropping them
 - 🌐 **Two fetchers** — fast HTTP for static pages, headless Chromium for JS-rendered SPAs
-- 🧠 **DS-first design** — built for Jupyter, pandas, and real pipelines
 
 ---
 
@@ -44,7 +47,7 @@ pip install chronicle-ds
 
 Chronicle requires **Python 3.10+**.
 
-For JS-rendered pages (Playwright):
+For JS-rendered pages:
 
 ```bash
 pip install "chronicle-ds[browser]"
@@ -58,7 +61,7 @@ playwright install chromium
 ```python
 from chronicle import Scrape
 
-# Works best on pages with a clear HTML <table>
+# Works on pages that contain a clear HTML <table>.
 df = Scrape(
     "https://en.wikipedia.org/wiki/List_of_most-viewed_YouTube_videos"
 ).to_dataframe()
@@ -66,13 +69,12 @@ df = Scrape(
 print(df.head())
 ```
 
-> **Note on auto-detection:** The one-liner works on pages with clear HTML
-> `<table>` elements. For anything else — product grids, news sites, SPAs,
-> JSON APIs — pass `selectors={...}`. See "More Control" below.
+> **Auto-detection** only supports HTML `<table>` elements. For product grids,
+> news lists, or SPAs, pass `selectors={...}` — see below.
 
 ## More Control
 
-Selector mode works on any HTML page, no matter how it's structured:
+Selector mode works on any HTML page:
 
 ```python
 from chronicle import Scrape
@@ -86,7 +88,6 @@ result = Scrape(
         "stock": "p.instock.availability",
         "link":  "h3 > a@href",
     },
-    pages=5,
     rate_limit=2.0,
 ).run()
 
@@ -94,11 +95,14 @@ df = result.to_dataframe()
 print(df.head())
 ```
 
+**Pagination** currently appends `?page=N` to the URL. This works for sites
+with query-string pagination, not for path-based pagination
+(e.g. `books.toscrape.com` uses `/catalogue/page-N.html`). Per-site pagination
+templates are on the roadmap.
+
 ## JS-rendered pages
 
-Modern sites build pages client-side — a plain HTTP fetch gets you an empty
-shell. Chronicle ships a Playwright-based fetcher that launches headless
-Chromium, waits for the content to actually render, and returns the final HTML.
+For pages that load content via JavaScript:
 
 ```python
 from chronicle import Scrape
@@ -111,30 +115,9 @@ result = Scrape(
         "author": "small.author",
     },
     use_playwright=True,
-    wait_for="div.quote",   # wait for this selector before parsing
+    wait_for="div.quote",
 ).run()
 ```
-> **Colab / Jupyter note:** Playwright's sync API cannot run inside a live
-> asyncio loop, which Jupyter and Colab both have. On those platforms,
-> run your Playwright scrape inside a separate thread:
->
-> ```python
-> import threading
->
-> result = {}
-> def run():
->     result["r"] = Scrape(
->         url="https://quotes.toscrape.com/js/",
->         selectors={"_container": "div.quote", "text": "span.text"},
->         use_playwright=True,
->         wait_for="div.quote",
->     ).run()
->
-> t = threading.Thread(target=run)
-> t.start()
-> t.join()
-> df = result["r"].to_dataframe()
-> ```
 
 **Key parameters:**
 
@@ -143,17 +126,30 @@ result = Scrape(
 | `use_playwright=True` | Use headless Chromium instead of httpx |
 | `wait_for="<css>"` | Wait for a selector to appear before parsing |
 | `wait_until` | `"domcontentloaded"` (default), `"load"`, or `"networkidle"` |
-| `cookies=[...]` | Pre-set cookies (useful for skipping consent walls) |
+| `cookies=[...]` | Pre-set cookies (consent walls, sessions) |
 
-**Known limitations:** Some sites (YouTube, Twitter, LinkedIn) actively detect
-headless browsers and serve reduced content. For those, use their official
-APIs. Chronicle is honest about what it can and can't do.
+> **Colab / Jupyter note:** Playwright's sync API cannot run inside a live
+> asyncio loop. On those platforms, run the scrape in a separate thread:
+>
+> ```python
+> import threading
+> result = {}
+> def run():
+>     result["r"] = Scrape(url, use_playwright=True, ...).run()
+> t = threading.Thread(target=run)
+> t.start(); t.join()
+> df = result["r"].to_dataframe()
+> ```
+
+**Known limitations:** Some sites (YouTube, Twitter, LinkedIn) detect
+headless browsers and serve reduced content. Use their official APIs.
+A Playwright async fetcher is on the roadmap.
 
 ---
 
 ## The Core Idea
 
-Chronicle treats every scrape as a **versioned event**. Every run writes an artifact to `.chronicle/`:
+Every `Scrape(...).run()` writes an artifact to `.chronicle/`:
 
 ```
 .chronicle/projects/<project_id>/
@@ -168,18 +164,24 @@ Chronicle treats every scrape as a **versioned event**. Every run writes an arti
 
 ### Drift Detection
 
-On the second and subsequent runs, Chronicle compares the new profile to the baseline and flags:
+On the second and subsequent runs, Chronicle compares the new profile to the
+baseline. **Currently implemented checks:**
 
-- **Schema drift** — columns added, removed, or renamed
-- **Null drift** — fields suddenly returning `None`
-- **Distribution drift** — mean, median, or variance shifts
-- **Range drift** — values outside historical bounds
-- **Selector health** — a column that used to be full is now mostly empty
+- **Schema drift** — columns added or removed
+- **Null drift** — per-column null % changes above thresholds
+- **Mean drift** — numeric column means shifting above thresholds (skipped if the baseline mean is 0)
+- **Range drift** — numeric values falling outside the baseline's min/max by more than 2×
+- **Selector health** — a column that used to be populated is now almost entirely null
 
 ```python
 from chronicle import Scrape
 
-result = Scrape("https://en.wikipedia.org/wiki/List_of_most-viewed_YouTube_videos").run()
+# IMPORTANT: drift requires fresh fetches. The httpx cache is ON by
+# default, so two runs in a row will compare a page to itself.
+result = Scrape(
+    "https://en.wikipedia.org/wiki/List_of_most-viewed_YouTube_videos",
+    use_cache=False,
+).run()
 
 if result.has_drift():
     print(result.drift_report.pretty())
@@ -203,16 +205,6 @@ Every `ScrapeResult` carries a `quality_report()` — row counts, success rate, 
 
 ```python
 result.quality_report()
-# {
-#   "rows_total": 100,
-#   "rows_valid": 98,
-#   "rows_invalid": 2,
-#   "success_rate": 0.98,
-#   "columns": {
-#     "price": {"dtype": "float64", "null_pct": 0.02, "mean": 145.3, ...},
-#     ...
-#   }
-# }
 ```
 
 ### Schema Validation
@@ -238,35 +230,101 @@ print(result.to_invalid_dataframe().head())   # rows that failed
 
 ---
 
+## Limitations (v0.2.0)
+
+This section exists because we'd rather you know the boundaries than trust a
+feature that isn't there yet.
+
+### Drift detection
+
+- **Drift is not called when the current run returns zero rows.** A broken
+  selector that produces 0 rows will not raise a drift alert. Fix in progress.
+- **The httpx cache is on by default.** Two consecutive runs will compare a
+  page to itself. Set `use_cache=False` when you want to test drift.
+- **Only numeric columns are profiled for drift.** String/categorical columns
+  are not checked for distribution or category changes.
+- **Median, variance, and KS-test drift are not implemented.** Only mean and
+  min/max are compared.
+- **The baseline is set from the first run and never updates automatically.**
+  No reset, no promotion command. Delete
+  `.chronicle/projects/<id>/baseline.json` to reset manually.
+- **`use_cache=True` also means** a site that changes between two runs at the
+  same URL will not be seen.
+
+### Parsing
+
+- **`<th scope="row">` cells are dropped** in auto table detection. Some
+  Wikipedia tables will produce shifted columns.
+- **Footnote markers** (`[1]`, `[a]`) are not stripped.
+- **`@text` is documented but returns `None`** in the current release. Use
+  `"selector"` (no `@`) for text extraction.
+- **Pagination is `?page=N` only.** Path-based pagination is not supported.
+- **Currency parsing** strips only `$`. `£`, `€`, and suffixes like `1.2B` are
+  not handled. `coerce_to_float` grabs the first numeric-looking run, so
+  `"2023-05-01"` becomes `2023.0`.
+
+### Storage
+
+- **One bad column fails the whole run.** Mixed-type columns (e.g.
+  `"1,000"` / `"900"` / `"N/A"`) cause the Parquet write to fail, which means
+  no manifest is written and no baseline is saved.
+- **Run IDs are second-resolution.** Two runs in the same second overwrite
+  each other.
+- **Raw HTML is stored uncompressed.**
+
+### Errors
+
+- **`ParseError` is not caught inside `run()`.** A page that fails to parse
+  ends the whole scrape.
+- **The CLI has no `--selectors` flag**, so `chronicle scrape <url>` only
+  works on table pages.
+- **No `robots.txt` check.** Respect target sites manually.
+
+### Coverage
+
+- `test_fetch.py` and `test_profile.py` are empty.
+- `cli.py` and `playwright_fetcher.py` are at 0% test coverage.
+- No end-to-end test currently exercises the full `scrape → store → drift`
+  path. This is why several of the issues above shipped.
+
+### Replay
+
+- The storage is designed to be replayable, but there is no `replay(run_id)`
+  API yet. `storage.load_run(project_id, run_id)` exists as a low-level
+  method.
+
+---
+
 ## Status
 
-🚧 **Alpha — v0.2.0.** Actively developed. APIs may shift before v1.0.
+🚧 **Alpha — v0.2.0.** Actively developed. Expect breaking changes before v1.0.
 
 ### What's built
-- [x] HTTP layer (`fetch.py`) — retries, exponential backoff, rate limiting, file cache
+- [x] HTTP layer (`fetch.py`) — retries, exponential backoff, per-instance rate limiting, file cache
 - [x] Playwright fetcher (`playwright_fetcher.py`) — headless Chromium for JS-rendered pages
-- [x] HTML parsing (`parse.py`) — selector mode + auto table detection
+- [x] HTML parsing (`parse.py`) — selector mode + auto table detection (with caveats above)
 - [x] Schema validation (`normalize.py`) — pydantic-based, quarantines invalid rows
-- [x] `Scrape` class (`core.py`) — one-line API, pagination, `ScrapeResult`
+- [x] `Scrape` class (`core.py`) — one-line API, `ScrapeResult`
 - [x] Storage (`storage.py`) — versioned artifacts + SQLite run index
-- [x] Profile generation (`profile.py`) — statistical fingerprint of each run
-- [x] Drift detection (`drift.py`) — null / distribution / range / schema / selector
-- [x] CLI (`cli.py`) — `version`, `scrape`, `runs` commands
+- [x] Profile generation (`profile.py`) — per-column statistical fingerprint
+- [x] Drift detection (`drift.py`) — schema, null, mean, range, selector health
+- [x] CLI (`cli.py`) — `version`, `scrape`, `runs` commands (limited; see above)
 - [x] 18 unit tests, CI across Ubuntu / Windows / macOS × Python 3.10 / 3.11 / 3.12
 - [x] Published to PyPI as `chronicle-ds`
 
-### Roadmap
-- **JSON API mode** — first-class handling of sites that serve data via internal JSON APIs
-- **History API** — `Scrape.history(url)` and `drift_timeline(url)` for time-series queries
-- **Data contracts** — declare "good data" (completeness, ranges, uniqueness) and fail the run when violated
-- **Self-healing selectors** — auto-detect broken selectors and suggest alternatives
-- **Playwright stealth** — evasion for sites that block headless browsers
+### Roadmap (priority order)
+1. **v0.2.1** — cache off by default, zero-row alarm, `__init__` selector validation, run-ID collisions, `<th>` row headers, `@text` fix, end-to-end test
+2. **v0.3.0** — row-count drift, dtype drift, string-shape drift, per-column type inference, baseline management command, path-based pagination
+3. **v0.3.x** — CLI `--selectors` and `drift` commands, `robots.txt`, `Retry-After` handling, cache TTL, per-host rate limiter, `replay(run_id)`
+4. **v0.4** — async Playwright fetcher, JSON API mode, data contracts, self-healing selectors
 
 ---
 
 ## Contributing
 
-Chronicle is in early, fast-moving development. Issues, ideas, and PRs are welcome.
+Chronicle is in early, fast-moving development. Issues, ideas, and PRs are
+welcome. If you find a bug, [open an issue](https://github.com/TheDataNormad/chronicle/issues)
+with a minimal reproduction.
 
 ```bash
 git clone git@github.com:TheDataNormad/chronicle.git
