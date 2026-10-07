@@ -4,10 +4,10 @@
 
 Chronicle is a data-science-native web scraping framework that stores every run, profiles the result, and compares it to a baseline — so silent changes in a page's structure or content are visible before they poison a pipeline.
 
-**⚠️ Alpha software.** Chronicle is v0.2.0. Drift detection works for a specific set of checks (see [Limitations](#limitations-v020)). It does not yet catch every kind of change. Read the limitations section before relying on it.
+**⚠️ Alpha software.** Chronicle is v0.2.1. Drift detection works for a specific set of checks (see [Limitations](#limitations-v021)). It does not yet catch every kind of change. Read the limitations section before relying on it.
 
 [![tests](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml/badge.svg)](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml)
-[![PyPI version](https://img.shields.io/badge/pypi-v0.2.0-blue.svg)](https://pypi.org/project/chronicle-ds/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.2.1-blue.svg)](https://pypi.org/project/chronicle-ds/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)]()
@@ -164,6 +164,7 @@ Every `Scrape(...).run()` writes an artifact to `.chronicle/`:
 On the second and subsequent runs, Chronicle compares the new profile to the
 baseline. **Currently implemented checks:**
 
+- **Row-count drift** — current run returns 0 rows after a nonzero baseline (SEVERE, catches broken selectors)
 - **Schema drift** — columns added or removed
 - **Null drift** — per-column null % changes above thresholds
 - **Mean drift** — numeric column means shifting above thresholds (skipped if the baseline mean is 0)
@@ -173,11 +174,8 @@ baseline. **Currently implemented checks:**
 ```python
 from chronicle import Scrape
 
-# IMPORTANT: drift requires fresh fetches. The httpx cache is ON by
-# default, so two runs in a row will compare a page to itself.
 result = Scrape(
     "https://en.wikipedia.org/wiki/List_of_most-viewed_YouTube_videos",
-    use_cache=False,
 ).run()
 
 if result.has_drift():
@@ -195,6 +193,11 @@ DRIFT REPORT   severity: SEVERE
     Null % jumped from 0.00% to 97.00% — selector likely broken
     baseline: 0.0  →  current: 0.97
 ```
+
+> **On caching:** the HTTP cache is **off by default** since v0.2.1.
+> Drift detection needs fresh HTML on each run to be meaningful. Pass
+> `use_cache=True` when iterating on selectors locally and you want to
+> avoid re-fetching.
 
 ### Quality Reports
 
@@ -227,17 +230,13 @@ print(result.to_invalid_dataframe().head())   # rows that failed
 
 ---
 
-## Limitations (v0.2.0)
+## Limitations (v0.2.1)
 
 This section exists because we'd rather you know the boundaries than trust a
 feature that isn't there yet.
 
 ### Drift detection
 
-- **Drift is not called when the current run returns zero rows.** A broken
-  selector that produces 0 rows will not raise a drift alert. Fix in progress.
-- **The httpx cache is on by default.** Two consecutive runs will compare a
-  page to itself. Set `use_cache=False` when you want to test drift.
 - **Only numeric columns are profiled for drift.** String/categorical columns
   are not checked for distribution or category changes.
 - **Median, variance, and KS-test drift are not implemented.** Only mean and
@@ -245,28 +244,22 @@ feature that isn't there yet.
 - **The baseline is set from the first run and never updates automatically.**
   No reset, no promotion command. Delete
   `.chronicle/projects/<id>/baseline.json` to reset manually.
-- **`use_cache=True` also means** a site that changes between two runs at the
-  same URL will not be seen.
+- **Comparison is only to the baseline**, not also to the previous run. On the
+  roadmap for v0.3.0.
 
 ### Parsing
 
-- **`<th scope="row">` cells are dropped** in auto table detection. Some
-  Wikipedia tables will produce shifted columns.
-- **Footnote markers** (`[1]`, `[a]`) are not stripped.
-- **`@text` is documented but returns `None`** in the current release. Use
-  `"selector"` (no `@`) for text extraction.
-- **Pagination is `?page=N` only.** Path-based pagination is not supported.
+- **Pagination is `?page=N` only.** Path-based pagination (e.g.
+  `books.toscrape.com/catalogue/page-N.html`) is not supported.
 - **Currency parsing** strips only `$`. `£`, `€`, and suffixes like `1.2B` are
   not handled. `coerce_to_float` grabs the first numeric-looking run, so
   `"2023-05-01"` becomes `2023.0`.
 
 ### Storage
 
-- **One bad column fails the whole run.** Mixed-type columns (e.g.
-  `"1,000"` / `"900"` / `"N/A"`) cause the Parquet write to fail, which means
-  no manifest is written and no baseline is saved.
-- **Run IDs are second-resolution.** Two runs in the same second overwrite
-  each other.
+- **One bad column can fail the whole run.** Mixed-type columns (e.g.
+  `"1,000"` / `"900"` / `"N/A"`) can cause the Parquet write to fail, which
+  means no manifest is written and no baseline is saved.
 - **Raw HTML is stored uncompressed.**
 
 ### Errors
@@ -279,10 +272,10 @@ feature that isn't there yet.
 
 ### Coverage
 
-- `test_fetch.py` and `test_profile.py` are empty.
+- `test_fetch.py` and `test_profile.py` are still empty.
 - `cli.py` and `playwright_fetcher.py` are at 0% test coverage.
-- No end-to-end test currently exercises the full `scrape → store → drift`
-  path. This is why several of the issues above shipped.
+- The end-to-end pipeline test (`tests/test_end_to_end_drift.py`) covers the
+  full scrape → store → drift path.
 
 ### Replay
 
@@ -294,26 +287,25 @@ feature that isn't there yet.
 
 ## Status
 
-🚧 **Alpha — v0.2.0.** Actively developed. Expect breaking changes before v1.0.
+🚧 **Alpha — v0.2.1.** Actively developed. Expect breaking changes before v1.0.
 
 ### What's built
-- [x] HTTP layer (`fetch.py`) — retries, exponential backoff, per-instance rate limiting, file cache
+- [x] HTTP layer (`fetch.py`) — retries, exponential backoff, per-instance rate limiting, file cache (opt-in)
 - [x] Playwright fetcher (`playwright_fetcher.py`) — headless Chromium for JS-rendered pages
 - [x] HTML parsing (`parse.py`) — selector mode + auto table detection (with caveats above)
 - [x] Schema validation (`normalize.py`) — pydantic-based, quarantines invalid rows
-- [x] `Scrape` class (`core.py`) — one-line API, `ScrapeResult`
-- [x] Storage (`storage.py`) — versioned artifacts + SQLite run index
+- [x] `Scrape` class (`core.py`) — one-line API, `ScrapeResult`, fail-fast selector validation
+- [x] Storage (`storage.py`) — versioned artifacts + SQLite run index, microsecond-precision run IDs
 - [x] Profile generation (`profile.py`) — per-column statistical fingerprint
-- [x] Drift detection (`drift.py`) — schema, null, mean, range, selector health
+- [x] Drift detection (`drift.py`) — zero-row, schema, null, mean, range, selector health
 - [x] CLI (`cli.py`) — `version`, `scrape`, `runs` commands (limited; see above)
-- [x] 18 unit tests, CI across Ubuntu / Windows / macOS × Python 3.10 / 3.11 / 3.12
+- [x] 23 tests (18 unit + 5 end-to-end pipeline), CI across Ubuntu / Windows / macOS × Python 3.10 / 3.11 / 3.12
 - [x] Published to PyPI as `chronicle-ds`
 
 ### Roadmap (priority order)
-1. **v0.2.1** — cache off by default, zero-row alarm, `__init__` selector validation, run-ID collisions, `<th>` row headers, `@text` fix, end-to-end test
-2. **v0.3.0** — row-count drift, dtype drift, string-shape drift, per-column type inference, baseline management command, path-based pagination
-3. **v0.3.x** — CLI `--selectors` and `drift` commands, `robots.txt`, `Retry-After` handling, cache TTL, per-host rate limiter, `replay(run_id)`
-4. **v0.4** — async Playwright fetcher, JSON API mode, data contracts, self-healing selectors
+1. **v0.3.0** — row-count and dtype drift, string-shape drift, per-column type inference, baseline management command, path-based pagination
+2. **v0.3.x** — CLI `--selectors` and `drift` commands, `robots.txt`, `Retry-After` handling, cache TTL, per-host rate limiter, `replay(run_id)`
+3. **v0.4** — async Playwright fetcher, JSON API mode, data contracts, self-healing selectors
 
 ---
 
