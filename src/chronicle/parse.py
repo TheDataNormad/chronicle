@@ -18,6 +18,7 @@ Usage:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import urljoin
 
@@ -31,6 +32,11 @@ except ImportError:
     from selectolax.parser import HTMLParser
 
 from chronicle.exceptions import ParseError
+
+
+# Matches footnote-style markers: [1], [a], [citation needed], etc.
+# Used by detect_tables to clean cell text.
+_FOOTNOTE_RE = re.compile(r"\[[^\]]*\]")
 
 
 def parse_html(
@@ -79,22 +85,28 @@ def _extract_field(node, selector: str, base_url: str | None) -> Any:
     """Extract a single field from a node using a CSS selector.
 
     Special syntax:
-        "a@href"   -> extract the href attribute of the <a> tag
-        "img@src"  -> extract the src attribute
-        "@text"    -> extract the node's own text
+        "a@href"    -> extract the href attribute of the <a> tag
+        "img@src"   -> extract the src attribute
+        "span@text" -> extract the text of the <span>
+        "@text"     -> extract the node's own text
     """
-    # Attribute extraction: "selector@attr"
+    # Attribute OR text extraction: "selector@attr" or "selector@text"
     if "@" in selector:
         sel, _, attr = selector.partition("@")
         target = node.css_first(sel) if sel else node
         if target is None:
             return None
+        # Special-case @text to mean "the node's text" rather than
+        # "the attribute named 'text'". Before this fix, "@text" and
+        # "span@text" silently returned None.
+        if attr == "text":
+            return target.text(strip=True)
         value = target.attributes.get(attr)
         if value and base_url and attr in ("href", "src"):
             value = urljoin(base_url, value)
         return value
 
-    # Plain text extraction
+    # Plain text extraction (no "@")
     target = node.css_first(selector)
     if target is None:
         return None
@@ -106,6 +118,12 @@ def detect_tables(html: str) -> list[dict[str, Any]]:
 
     Simple heuristic for the common case of "data lives in a table".
     Picks the table with the most rows.
+
+    Handles:
+    - `<th scope="row">` row headers (e.g. Wikipedia's rank column) so
+      columns don't shift when a table has both <th> and <td> cells
+    - Footnote markers like `[1]`, `[a]`, `[citation needed]` are
+      stripped from cell text so downstream type casting works
     """
     tree = HTMLParser(html)
     tables = tree.css("table")
@@ -119,16 +137,29 @@ def detect_tables(html: str) -> list[dict[str, Any]]:
 
     header_cells = rows[0].css("th, td")
     headers = [
-        cell.text(strip=True) or f"col_{i}"
+        _clean_cell_text(cell.text(strip=True)) or f"col_{i}"
         for i, cell in enumerate(header_cells)
     ]
 
     data: list[dict[str, Any]] = []
     for row in rows[1:]:
-        cells = row.css("td")
+        cells = row.css("th, td")
         if not cells:
             continue
-        values = [c.text(strip=True) for c in cells]
+        values = [_clean_cell_text(c.text(strip=True)) for c in cells]
         data.append(dict(zip(headers, values)))
 
     return data
+
+
+def _clean_cell_text(text: str) -> str:
+    """Strip footnote markers from a table cell's text.
+
+    Examples:
+        'Baby Shark Dance[4]'      -> 'Baby Shark Dance'
+        'China[a]'                 -> 'China'
+        'Foo[citation needed]'     -> 'Foo'
+    """
+    if not text:
+        return text
+    return _FOOTNOTE_RE.sub("", text).strip()
