@@ -2,7 +2,6 @@
 
 from chronicle.drift import detect_drift, ks_drift
 
-
 BASELINE = {
     "row_count": 100,
     "columns": {

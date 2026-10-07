@@ -21,11 +21,9 @@ import socketserver
 import threading
 from contextlib import contextmanager
 
-import pytest
 from pydantic import BaseModel
 
 from chronicle import Scrape
-
 
 # ------------------------------------------------------------------ server
 

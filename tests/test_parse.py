@@ -1,7 +1,6 @@
 """Tests for chronicle.parse."""
 
-from chronicle.parse import parse_html, detect_tables
-
+from chronicle.parse import detect_tables, parse_html
 
 SAMPLE_HTML = """
 <html><body>

@@ -33,7 +33,6 @@ except ImportError:
 
 from chronicle.exceptions import ParseError
 
-
 # Matches footnote-style markers: [1], [a], [citation needed], etc.
 # Used by detect_tables to clean cell text.
 _FOOTNOTE_RE = re.compile(r"\[[^\]]*\]")
