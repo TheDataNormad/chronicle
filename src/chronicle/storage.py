@@ -139,7 +139,17 @@ class Storage:
 
     @staticmethod
     def new_run_id() -> str:
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+        """Return a UTC-timestamped run id with microsecond precision.
+
+        The previous second-level resolution (``%Y-%m-%dT%H-%M-%S``)
+        meant two runs in the same second produced the same id, so the
+        second run silently overwrote the first's artifacts and the
+        SQLite primary key collided (``INSERT OR REPLACE`` swallowed
+        the earlier row). Microseconds make collisions require two
+        runs in the same microsecond — statistically impossible for
+        real workloads.
+        """
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f")
 
     # ---------------------------------------------------------------- paths
 
