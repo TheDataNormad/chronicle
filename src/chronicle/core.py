@@ -14,7 +14,7 @@ from typing import Any
 import pandas as pd
 from pydantic import BaseModel
 
-from chronicle.drift import DriftReport, detect_drift
+from chronicle.drift import DriftFinding, DriftReport, detect_drift
 from chronicle.exceptions import ScrapeError
 from chronicle.fetch import Fetcher
 from chronicle.normalize import NormalizeResult, normalize_rows
@@ -116,7 +116,7 @@ class Scrape:
         pages: int = 1,
         rate_limit: float = 1.0,
         strict: bool = False,
-        use_cache: bool = True,
+        use_cache: bool = False,
         store: bool = True,
         detect_drift: bool = True,
         storage_root: str | None = None,
@@ -125,6 +125,18 @@ class Scrape:
         wait_until: str = "domcontentloaded",
         cookies: list[dict] | None = None,
     ) -> None:
+        # Fail fast: validate selectors before any network call.
+        if selectors is not None:
+            if "_container" not in selectors:
+                raise ScrapeError(
+                    "selectors dict must include a '_container' key pointing to "
+                    "the CSS selector for the repeating row element."
+                )
+            if not selectors["_container"].strip():
+                raise ScrapeError(
+                    "selectors['_container'] cannot be empty."
+                )
+
         self.url = url
         self.selectors = selectors or {}
         self.schema = schema
@@ -228,9 +240,45 @@ class Scrape:
             if profile is not None:
                 self._storage.save_baseline(project_id, profile)
             result.baseline_used = "self (first run)"
-        elif self.detect_drift and profile is not None:
+        elif self.detect_drift:
             result.baseline_used = baseline.get("_run_id", "baseline")
-            result.drift_report = detect_drift(baseline, profile)
+            result.drift_report = self._compute_drift(baseline, profile, df)
+
+    def _compute_drift(
+        self,
+        baseline: dict[str, Any],
+        profile: dict[str, Any] | None,
+        df: pd.DataFrame,
+    ) -> DriftReport | None:
+        """Compare the current run to the baseline.
+
+        Handles the zero-row case explicitly. If the baseline had N>0
+        rows and the current run has 0 rows, that is SEVERE drift — most
+        likely a broken selector — and must not be silent.
+        """
+        baseline_rows = int(baseline.get("row_count", 0))
+        current_rows = len(df)
+
+        if current_rows == 0 and baseline_rows > 0:
+            return DriftReport(findings=[
+                DriftFinding(
+                    column="<all>",
+                    kind="row_count",
+                    severity="SEVERE",
+                    message=(
+                        f"Scrape returned 0 rows after a baseline of "
+                        f"{baseline_rows} rows. Selector likely broken "
+                        f"or page structure changed."
+                    ),
+                    baseline_value=baseline_rows,
+                    current_value=0,
+                )
+            ])
+
+        if profile is None:
+            return None
+
+        return detect_drift(baseline, profile)
 
     def _parse(self, html: str) -> list[dict[str, Any]]:
         if self.selectors:
