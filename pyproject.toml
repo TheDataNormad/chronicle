@@ -1,6 +1,6 @@
 [project]
 name = "chronicle-ds"
-version = "0.2.0"
+version = "0.2.1"
 description = "The web scraping library that remembers — DS-native data acquisition with temporal versioning and drift detection."
 readme = "README.md"
 license = { text = "MIT" }
