@@ -246,9 +246,16 @@ feature that isn't there yet.
   `.chronicle/projects/<id>/baseline.json` to reset manually.
 - **Comparison is only to the baseline**, not also to the previous run. On the
   roadmap for v0.3.0.
+- **Dtype drift is not detected.** A column that was `float64` in the baseline
+  and is `object` now will not raise a drift finding on its own.
+- **Extra schema fields are silently ignored.** If the current run returns a
+  column the schema doesn't declare, it is not surfaced as drift.
 
 ### Parsing
 
+- **Integer coercion truncates silently.** A value like `12.9` in an `int`
+  field is currently converted to `12` without warning. Fix is planned for
+  v0.3.0 as a P0 correctness issue.
 - **Pagination is `?page=N` only.** Path-based pagination (e.g.
   `books.toscrape.com/catalogue/page-N.html`) is not supported.
 - **Currency parsing** strips only `$`. `£`, `€`, and suffixes like `1.2B` are
@@ -269,6 +276,9 @@ feature that isn't there yet.
 - **The CLI has no `--selectors` flag**, so `chronicle scrape <url>` only
   works on table pages.
 - **No `robots.txt` check.** Respect target sites manually.
+- **Rate limiting is per-instance, not per-host.** The `RateLimiter` is
+  attached to each `Fetcher`, so multiple `Scrape` instances targeting the
+  same host will not coordinate. The docstring is being corrected in v0.3.0.
 
 ### Coverage
 
@@ -303,9 +313,17 @@ feature that isn't there yet.
 - [x] Published to PyPI as `chronicle-ds`
 
 ### Roadmap (priority order)
-1. **v0.3.0** — row-count and dtype drift, string-shape drift, per-column type inference, baseline management command, path-based pagination
+1. **v0.3.0** — integer coercion safety (P0), dtype drift, categorical drift, statistical drift integration (KS/PSI), extra-field surfacing, row-count drift, baseline management, per-column type inference, path-based pagination
 2. **v0.3.x** — CLI `--selectors` and `drift` commands, `robots.txt`, `Retry-After` handling, cache TTL, per-host rate limiter, `replay(run_id)`
 3. **v0.4** — async Playwright fetcher, JSON API mode, data contracts, self-healing selectors
+
+---
+
+## Follow
+
+- **LinkedIn:** [linkedin.com/company/chronicle-ds](https://www.linkedin.com/company/chronicle-ds)
+- **PyPI:** [pypi.org/project/chronicle-ds](https://pypi.org/project/chronicle-ds/)
+- **GitHub:** [github.com/TheDataNormad/chronicle](https://github.com/TheDataNormad/chronicle)
 
 ---
 
