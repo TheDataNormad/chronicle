@@ -67,6 +67,10 @@ ignore = [
     "S110",     # try/except/pass is intentional in cleanup code
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Dates without a timezone are intentional here (naive unless the source says otherwise).
+"src/chronicle/clean.py" = ["DTZ001", "DTZ007"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --cov=chronicle --cov-report=term-missing"
+addopts = "-v"

@@ -154,6 +154,8 @@ Every `Scrape(...).run()` writes an artifact to `.chronicle/`:
 └── runs/<run_id>/
     ├── manifest.json       # config, timestamps, library version
     ├── profile.json        # statistical fingerprint of each column
+    ├── diff.json           # what changed since the previous run
+    ├── cleaning.json       # what was converted, flagged or left unconverted
     ├── data.parquet        # the validated DataFrame
     ├── invalid.parquet     # quarantined rows (if any)
     └── raw/page_1.html     # exact HTML received
@@ -198,6 +200,50 @@ DRIFT REPORT   severity: SEVERE
 > Drift detection needs fresh HTML on each run to be meaningful. Pass
 > `use_cache=True` when iterating on selectors locally and you want to
 > avoid re-fetching.
+
+### Changes Since Last Run
+
+Every run is also compared, row by row, to the **previous** run, automatically.
+Pass `key=` so Chronicle can tell an edited value from a new row:
+
+```python
+result = Scrape(
+    "http://books.toscrape.com/",
+    selectors={...},
+    key="title",
+).run()
+
+if result.has_changes():
+    print(result.changes.pretty())
+    result.changes.to_dataframe()   # one row per change
+```
+
+Without `key`, Chronicle reports added and removed rows only (an edited value
+appears as one removed + one added row). It never guesses a key. If a run had
+failed pages, or returned zero rows, the report says so in `warnings` instead
+of presenting removed rows as confirmed deletions. The diff is saved as
+`diff.json` in the run folder.
+
+### Dates and the Cleaning Report
+
+Chronicle converts date columns to real datetimes, but never guesses.
+`03/04/2026` is 3 April or 4 March, and a wrong pick looks perfectly valid.
+So a date is converted only when one reading is possible, in this order:
+
+1. **Declared:** `date_formats={"published": "%d/%m/%Y"}` or `dayfirst=True`
+2. **Unambiguous:** `2026-04-03`, `3 Apr 2026`, `25/04/2026`, `05/05/2026`
+3. **Column evidence:** one value like `25/04/2026` settles day-first for
+   every value in that style
+4. **Otherwise flagged:** it becomes `NaT` and the original text is kept in
+   `result.cleaning`
+
+```python
+result = Scrape(url, selectors={...}, dayfirst=True).run()
+print(result.cleaning.pretty())
+result.cleaning.to_dataframe()   # every flagged value, original preserved
+```
+
+The report is saved as `cleaning.json` in each run folder.
 
 ### Quality Reports
 

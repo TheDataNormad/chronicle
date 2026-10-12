@@ -36,6 +36,7 @@ from chronicle.exceptions import ParseError
 # Matches footnote-style markers: [1], [a], [citation needed], etc.
 # Used by detect_tables to clean cell text.
 _FOOTNOTE_RE = re.compile(r"\[[^\]]*\]")
+_ATTR_NAME_RE = re.compile(r"[A-Za-z_:][\w:.\-]*")
 
 
 def parse_html(
@@ -89,9 +90,12 @@ def _extract_field(node, selector: str, base_url: str | None) -> Any:
         "span@text" -> extract the text of the <span>
         "@text"     -> extract the node's own text
     """
-    # Attribute OR text extraction: "selector@attr" or "selector@text"
-    if "@" in selector:
-        sel, _, attr = selector.partition("@")
+    # Attribute OR text extraction: "selector@attr" or "selector@text".
+    # Split on the LAST "@" and only if what follows is a plain attribute
+    # name, so selectors like  a[href*="@"]  or  a[href^="mailto:x@y"]  are
+    # still treated as ordinary CSS selectors.
+    sel, sep, attr = selector.rpartition("@")
+    if sep and _ATTR_NAME_RE.fullmatch(attr):
         target = node.css_first(sel) if sel else node
         if target is None:
             return None
@@ -135,10 +139,10 @@ def detect_tables(html: str) -> list[dict[str, Any]]:
         return []
 
     header_cells = rows[0].css("th, td")
-    headers = [
+    headers = _unique_headers([
         _clean_cell_text(cell.text(strip=True)) or f"col_{i}"
         for i, cell in enumerate(header_cells)
-    ]
+    ])
 
     data: list[dict[str, Any]] = []
     for row in rows[1:]:
@@ -146,9 +150,36 @@ def detect_tables(html: str) -> list[dict[str, Any]]:
         if not cells:
             continue
         values = [_clean_cell_text(c.text(strip=True)) for c in cells]
-        data.append(dict(zip(headers, values)))
+        # Never drop a cell silently: extra cells get their own columns and
+        # short rows are padded with None (CORE principle 4).
+        names = list(headers)
+        while len(names) < len(values):
+            names.append(f"col_{len(names)}")
+        record = {n: None for n in names}
+        record.update(zip(names, values))
+        data.append(record)
 
-    return data
+    # Rows may now have different widths; give every row every column.
+    all_cols: list[str] = []
+    for rec in data:
+        for c in rec:
+            if c not in all_cols:
+                all_cols.append(c)
+    return [{c: rec.get(c) for c in all_cols} for rec in data]
+
+
+def _unique_headers(headers: list[str]) -> list[str]:
+    """Make header names unique: ['Total', 'Total'] -> ['Total', 'Total_2'].
+
+    ``dict(zip(headers, values))`` used to keep only the last duplicate,
+    silently losing a whole column.
+    """
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for h in headers:
+        seen[h] = seen.get(h, 0) + 1
+        out.append(h if seen[h] == 1 else f"{h}_{seen[h]}")
+    return out
 
 
 def _clean_cell_text(text: str) -> str:

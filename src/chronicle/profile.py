@@ -16,6 +16,15 @@ from typing import Any
 import pandas as pd
 
 
+def _unique_count(series: pd.Series) -> int:
+    """Count distinct non-null values, including list/dict cells (JSON arrays
+    and objects), which pandas cannot hash directly."""
+    try:
+        return int(series.nunique(dropna=True))
+    except TypeError:
+        return int(series.dropna().map(repr).nunique())
+
+
 def generate_profile(df: pd.DataFrame) -> dict[str, Any]:
     """Build a statistical profile of a DataFrame.
 
@@ -38,7 +47,7 @@ def generate_profile(df: pd.DataFrame) -> dict[str, Any]:
         col_profile: dict[str, Any] = {
             "dtype": str(series.dtype),
             "null_pct": round(float(series.isna().mean()), 4),
-            "unique_count": int(series.nunique(dropna=True)),
+            "unique_count": _unique_count(series),
         }
 
         # Numeric columns: full stats
