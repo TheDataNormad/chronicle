@@ -7,7 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Changes since the previous run** (CORE principle 3). Every stored run
+  is now compared row by row to the run before it, automatically, with no
+  flag. The result is `result.changes` (a `DiffReport`) with
+  `rows_added`, `rows_removed`, changed cells, column and dtype changes,
+  `.pretty()` and `.to_dataframe()`. Also written to `diff.json` in the run
+  artifact, and the manifest records `previous_run_id`. (`diff.py`,
+  `core.py`, `storage.py`)
+- **`key=` argument** on `Scrape` (`key="name"` or `key=["a", "b"]`). With a
+  key, edited values are reported as changed cells. Without one, Chronicle
+  reports added/removed rows only and says so; it never guesses a key.
+- **Honest warnings** in the diff: zero-row runs, duplicate or missing keys,
+  keys absent from a run, and runs with failed pages (removed rows may be
+  coverage gaps, not deletions).
+- `result.has_changes()` and a `changes` entry in `result.summary()`.
+
+- **Date parsing that never guesses** (CORE principle 4). Date columns are
+  detected (or declared) and converted to real datetimes. A value is only
+  converted when exactly one reading is possible; otherwise it is flagged
+  and the original text is kept in the cleaning report. Resolution order:
+  declared `date_formats` / `dayfirst`, then unambiguous forms (ISO, month
+  names, `25/04/2026`, `05/05/2026`), then column evidence (any value with
+  day > 12 settles the order for that separator style), then flag.
+  (`clean.py`)
+- **`dayfirst=` and `date_formats=`** arguments on `Scrape` and
+  `normalize_rows`.
+- **Cleaning report** (`result.cleaning`, saved as `cleaning.json`):
+  per-column dates parsed / missing / flagged, plus every value that was
+  flagged, with row index, original text, kind, reason and candidate
+  readings. Also records values that became missing (`became_missing`),
+  numbers read from surrounding text (`partial_parse`), truncated integers
+  (`lossy_int`) and comma-ambiguous numbers (`ambiguous_number`).
+
+### Fixed
+
+- **Type inference turned codes into booleans.** Without a schema, `"1"`,
+  `"0"`, `"y"`, `"n"`, `"t"`, `"f"` became `True`/`False`, so a grade of
+  `"F"` became `False` and a column of `1, 0, 2` became `True, False, 2`.
+  Only `true/false/yes/no` are inferred as booleans now. Declared `bool`
+  schema fields are unchanged.
+- **`"12,5"` was read as 125** when inferring types. It is now kept as text
+  and recorded as `ambiguous_number`. `"1,234"` still reads as 1234.
+
+### Known limitations
+
+- Schema-path numeric coercion still takes the first number in text such as
+  `"12-15"` (now recorded as `partial_parse`, not yet rejected).
+- Only four-digit years are auto-detected in numeric dates; two-digit years
+  need `date_formats`.
+- English month names only.
+
+### Notes
+
+- Drift detection still compares against the long-term baseline; the new
+  diff compares against the previous run. They answer different questions.
 
 ## [0.2.1] - 2026-10-07
 

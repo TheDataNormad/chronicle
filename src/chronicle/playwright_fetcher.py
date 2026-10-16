@@ -33,8 +33,15 @@ import hashlib
 import time
 from pathlib import Path
 
+import httpx
+
 from chronicle.exceptions import FetchError
-from chronicle.fetch import DEFAULT_CACHE_DIR, DEFAULT_USER_AGENT, RateLimiter
+from chronicle.fetch import (
+    DEFAULT_CACHE_DIR,
+    DEFAULT_USER_AGENT,
+    RateLimiter,
+    RobotsChecker,
+)
 
 
 class PlaywrightFetcher:
@@ -54,8 +61,9 @@ class PlaywrightFetcher:
         headless: bool = True,
         user_agent: str = DEFAULT_USER_AGENT,
         cache_dir: Path | None = None,
-        use_cache: bool = True,
-        cookies: list[dict] | None = None,  # pre-set cookies (e.g. consent bypass)
+        use_cache: bool = False,
+        cookies: list[dict] | None = None,  # pre-set cookies (e.g. cookie-consent choice)
+        respect_robots: bool = True,
     ) -> None:
         self.rate_limiter = RateLimiter(rate_limit)
         self.retries = retries
@@ -67,6 +75,9 @@ class PlaywrightFetcher:
         self.cache_dir = cache_dir or DEFAULT_CACHE_DIR
         self.use_cache = use_cache
         self.cookies = cookies or []
+        self.respect_robots = respect_robots
+        self._robots_client: httpx.Client | None = None
+        self._robots: RobotsChecker | None = None
         self._playwright = None
         self._browser = None
         self._context = None
@@ -116,6 +127,10 @@ class PlaywrightFetcher:
 
     def close(self) -> None:
         """Close the browser and stop Playwright."""
+        if self._robots_client is not None:
+            self._robots_client.close()
+            self._robots_client = None
+            self._robots = None
         if self._context is not None:
             try:
                 self._context.close()
@@ -145,6 +160,7 @@ class PlaywrightFetcher:
 
     def get(self, url: str) -> str:
         """Fetch a URL, render its JavaScript, and return the HTML."""
+        self._check_robots(url)
         if self.use_cache:
             cached = self._read_cache(url)
             if cached is not None:
@@ -156,6 +172,17 @@ class PlaywrightFetcher:
             self._write_cache(url, html)
 
         return html
+
+    def _check_robots(self, url: str) -> None:
+        """Raise FetchError if robots.txt forbids ``url`` (CORE principle 7)."""
+        if not self.respect_robots:
+            return
+        if self._robots is None:
+            self._robots_client = httpx.Client(
+                headers={"User-Agent": self.user_agent}, timeout=15.0, follow_redirects=True
+            )
+            self._robots = RobotsChecker(self._robots_client, self.user_agent)
+        self._robots.check(url)
 
     def _fetch_with_retries(self, url: str) -> str:
         self._ensure_browser()

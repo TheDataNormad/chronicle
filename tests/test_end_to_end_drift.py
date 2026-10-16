@@ -201,3 +201,86 @@ def test_zero_rows_on_first_run_is_not_drift(tmp_path):
     assert result.is_first_run is True
     assert result.rows_scraped == 0
     assert not result.has_drift()
+
+# ------------------------------------------------------------------ changes
+
+
+def _scrape_keyed(url: str, storage_root: str):
+    return Scrape(
+        url=url,
+        selectors=SELECTORS,
+        schema=Product,
+        key="name",
+        storage_root=storage_root,
+        rate_limit=1000.0,
+    ).run()
+
+
+def test_first_run_has_no_changes_report(tmp_path):
+    root = str(tmp_path / "chronicle")
+    with http_server(HTML_V1) as url:
+        r = _scrape_keyed(url, root)
+    assert r.changes is None
+    assert r.previous_run_id is None
+    assert not r.has_changes()
+
+
+def test_second_run_reports_changed_prices_vs_previous_run(tmp_path):
+    root = str(tmp_path / "chronicle")
+    with http_server(HTML_V1) as url:
+        first = _scrape_keyed(url, root)
+        set_html(HTML_V2_NEW_PRICES)
+        second = _scrape_keyed(url, root)
+
+    assert second.previous_run_id == first.manifest["run_id"]
+    assert second.has_changes()
+    assert second.changes.rows_changed == 3
+    assert {c.column for c in second.changes.changed} == {"price"}
+    assert second.manifest["previous_run_id"] == first.manifest["run_id"]
+
+
+def test_comparison_is_to_previous_run_not_to_baseline(tmp_path):
+    """Run 3 is identical to run 2, so it must report NO changes even
+    though it differs from the run-1 baseline."""
+    root = str(tmp_path / "chronicle")
+    with http_server(HTML_V1) as url:
+        _scrape_keyed(url, root)
+        set_html(HTML_V2_NEW_PRICES)
+        _scrape_keyed(url, root)
+        third = _scrape_keyed(url, root)
+    assert not third.has_changes()
+
+
+def test_zero_rows_run_still_reports_changes(tmp_path):
+    root = str(tmp_path / "chronicle")
+    with http_server(HTML_V1) as url:
+        _scrape_keyed(url, root)
+        set_html(HTML_V3_SELECTOR_BROKEN)
+        broken = _scrape_keyed(url, root)
+    assert broken.rows_scraped == 0
+    assert broken.changes is not None
+    assert broken.changes.rows_removed == 3
+    assert any("0 rows" in w for w in broken.changes.warnings)
+
+
+def test_diff_json_is_persisted_with_run(tmp_path):
+    import json
+    from pathlib import Path
+
+    root = str(tmp_path / "chronicle")
+    with http_server(HTML_V1) as url:
+        _scrape_keyed(url, root)
+        set_html(HTML_V2_NEW_PRICES)
+        second = _scrape_keyed(url, root)
+    run_dir = Path(root) / "projects" / second.manifest["project_id"] / "runs" / second.manifest["run_id"]
+    data = json.loads((run_dir / "diff.json").read_text())
+    assert data["rows_changed"] == 3
+
+
+def test_unknown_key_fails_fast():
+    import pytest
+
+    from chronicle.exceptions import ScrapeError
+
+    with pytest.raises(ScrapeError):
+        Scrape("http://x/", selectors=SELECTORS, key="sku")

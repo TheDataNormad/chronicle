@@ -11,6 +11,8 @@ Layout:
         └── runs/<run_id>/
             ├── manifest.json
             ├── profile.json
+            ├── diff.json
+            ├── cleaning.json
             ├── data.parquet
             ├── invalid.parquet
             └── raw/page_N.html
@@ -21,11 +23,12 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import pandas as pd
 
@@ -51,6 +54,63 @@ CREATE INDEX IF NOT EXISTS idx_runs_url ON runs(url);
 """
 
 
+_SECRET_PARAMS = {
+    "api_key", "apikey", "api-key", "key", "token", "access_token", "auth",
+    "authorization", "secret", "client_secret", "password", "passwd", "sig",
+    "signature",
+}
+
+
+def redact_url(url: str) -> str:
+    """Hide secret-looking query parameters before a URL is stored.
+
+    ``https://api.example.com/v1?api_key=abc&page=2`` is stored as
+    ``...?api_key=REDACTED&page=2`` so keys never end up in manifests,
+    the run index, or a git repo that contains ``.chronicle/``.
+    """
+    parts = urlparse(url)
+    if not parts.query:
+        return url
+    pairs = parse_qsl(parts.query, keep_blank_values=True)
+    if not any(k.lower() in _SECRET_PARAMS for k, _ in pairs):
+        return url  # nothing secret: leave the URL byte-for-byte unchanged
+    cleaned = [
+        (k, "REDACTED" if k.lower() in _SECRET_PARAMS else v) for k, v in pairs
+    ]
+    return urlunparse(parts._replace(query=urlencode(cleaned)))
+
+
+def _arrow_safe(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Make a DataFrame writable to parquet without losing any value.
+
+    Columns that hold values of mixed types (e.g. ``10`` and ``"N/A"``)
+    cannot be stored as parquet. Those columns are stored as text, and the
+    caller is told which ones, so nothing changes silently.
+    """
+    import pyarrow as pa
+
+    notes: list[str] = []
+    out = df
+    for col in df.columns:
+        if df[col].dtype != object:
+            continue
+        try:
+            pa.array(df[col].tolist())
+        except (pa.ArrowInvalid, pa.ArrowTypeError, pa.ArrowNotImplementedError):
+            if out is df:
+                out = df.copy()
+            out[col] = [
+                None if v is None or (isinstance(v, float) and pd.isna(v))
+                else json.dumps(v, default=str) if isinstance(v, (list, dict, tuple))
+                else str(v)
+                for v in df[col]
+            ]
+            notes.append(
+                f"column '{col}' held values of mixed types and was stored as text"
+            )
+    return out, notes
+
+
 @dataclass
 class RunManifest:
     """Metadata about a single scrape run."""
@@ -68,6 +128,7 @@ class RunManifest:
     valid_count: int = 0
     invalid_count: int = 0
     errors: list[str] = field(default_factory=list)
+    previous_run_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -91,14 +152,14 @@ class Storage:
 
     def _init_db(self) -> None:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn, conn:
                 conn.executescript(_SCHEMA)
         except sqlite3.Error as e:
             raise StorageError(f"Failed to initialize index: {e}") from e
 
     def _insert_run(self, manifest: RunManifest, artifact_path: Path) -> None:
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with closing(sqlite3.connect(self.db_path)) as conn, conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO runs
@@ -129,6 +190,7 @@ class Storage:
     @staticmethod
     def project_id_for(url: str) -> str:
         """Stable project id derived from the URL host + path."""
+        url = redact_url(url)  # a rotated API key must not start a new project
         parsed = urlparse(url)
         slug = f"{parsed.netloc}{parsed.path}".strip("/")
         if not slug:
@@ -181,16 +243,23 @@ class Storage:
         pages_succeeded: int = 0,
         pages_failed: int = 0,
         errors: list[str] | None = None,
-        chronicle_version: str = "0.1.0",
+        chronicle_version: str | None = None,
+        raw_ext: str = "html",
+        diff: dict[str, Any] | None = None,
+        cleaning: dict[str, Any] | None = None,
+        previous_run_id: str | None = None,
     ) -> RunManifest:
         """Persist a scrape run to disk and index it."""
-        from chronicle import __version__ as _v  # local import to avoid cycle
+        from chronicle._version import __version__ as _v
         project_id = self.project_id_for(url)
         run_id = self.new_run_id()
         run_path = self.run_dir(project_id, run_id)
 
         # Data
+        errors = list(errors or [])
         try:
+            data, notes = _arrow_safe(data)
+            errors.extend(notes)
             data.to_parquet(run_path / "data.parquet", index=False)
             if invalid is not None and not invalid.empty:
                 invalid.to_parquet(run_path / "invalid.parquet", index=False)
@@ -199,9 +268,9 @@ class Storage:
 
         # Raw pages
         if raw_pages:
-            for i, html in enumerate(raw_pages, start=1):
-                (run_path / "raw" / f"page_{i}.html").write_text(
-                    html, encoding="utf-8"
+            for i, body in enumerate(raw_pages, start=1):
+                (run_path / "raw" / f"page_{i}.{raw_ext}").write_text(
+                    body, encoding="utf-8"
                 )
 
         # Profile
@@ -211,13 +280,27 @@ class Storage:
                 encoding="utf-8",
             )
 
+        # Cleaning report: what was converted, flagged, quarantined
+        if cleaning is not None:
+            (run_path / "cleaning.json").write_text(
+                json.dumps(cleaning, indent=2, default=str),
+                encoding="utf-8",
+            )
+
+        # Changes since the previous run
+        if diff is not None:
+            (run_path / "diff.json").write_text(
+                json.dumps(diff, indent=2, default=str),
+                encoding="utf-8",
+            )
+
         # Manifest
         manifest = RunManifest(
             run_id=run_id,
             project_id=project_id,
-            url=url,
+            url=redact_url(url),
             timestamp=datetime.now(timezone.utc).isoformat(),
-            chronicle_version=_v if chronicle_version == "0.1.0" else chronicle_version,
+            chronicle_version=chronicle_version or _v,
             config=config or {},
             pages_requested=pages_requested,
             pages_succeeded=pages_succeeded,
@@ -225,7 +308,8 @@ class Storage:
             row_count=len(data),
             valid_count=len(data),
             invalid_count=len(invalid) if invalid is not None else 0,
-            errors=errors or [],
+            errors=errors,
+            previous_run_id=previous_run_id,
         )
         (run_path / "manifest.json").write_text(
             json.dumps(manifest.to_dict(), indent=2, default=str),
@@ -267,17 +351,37 @@ class Storage:
         params: list[Any] = []
         if url:
             query += " AND url = ?"
-            params.append(url)
+            params.append(redact_url(url))
         if project_id:
             query += " AND project_id = ?"
             params.append(project_id)
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
 
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn:
             conn.row_factory = sqlite3.Row
             rows = [dict(r) for r in conn.execute(query, params).fetchall()]
         return rows
+
+    def previous_run(self, project_id: str) -> dict[str, Any] | None:
+        """Most recent stored run for a project, with its data loaded.
+
+        Call this BEFORE ``save_run`` so "previous" means the run before
+        the one being saved. Returns None if there is no prior run. If a
+        prior run is indexed but its artifacts cannot be read, raises
+        StorageError instead of silently skipping the comparison.
+        """
+        runs = self.list_runs(project_id=project_id, limit=1)
+        if not runs:
+            return None
+        try:
+            loaded = self.load_run(project_id, runs[0]["run_id"])
+        except Exception as e:
+            raise StorageError(
+                f"Previous run {runs[0]['run_id']} could not be read: {e}"
+            ) from e
+        loaded["run_id"] = runs[0]["run_id"]
+        return loaded
 
     def latest_run(self, url: str) -> dict[str, Any] | None:
         runs = self.list_runs(url=url, limit=1)
