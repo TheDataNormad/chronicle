@@ -5,4 +5,4 @@ manifest, so the three can never disagree. A test checks that it also
 matches ``pyproject.toml``.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
