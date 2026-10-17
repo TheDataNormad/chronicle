@@ -5,22 +5,16 @@
 Chronicle is a data-science-native web scraping library. It stores every run, profiles the result, and compares it to history — so silent changes in a page's structure or content are visible **before they poison your pipeline.**
 
 [![tests](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml/badge.svg)](https://github.com/TheDataNormad/chronicle/actions/workflows/tests.yml)
-[![PyPI version](https://img.shields.io/badge/pypi-v0.2.1-blue.svg)](https://pypi.org/project/chronicle-ds/)
-[![GitHub main](https://img.shields.io/badge/github-v0.3.0--alpha-orange.svg)](https://github.com/TheDataNormad/chronicle)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.3.0-blue.svg)](https://pypi.org/project/chronicle-ds/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status--limitations)
 
 [![Follow on LinkedIn](https://img.shields.io/badge/Follow%20on%20LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/company/chronicle-ds)
 
-> ⚠️ **Alpha software.** Two versions are current:
->
-> - **v0.2.1** is on [PyPI](https://pypi.org/project/chronicle-ds/). Fine for text data; has known numeric-handling bugs.
-> - **v0.3.0-alpha** is on `main`. Fixes the numeric bugs and adds run-to-run diff, date cleaning, and a JSON connector. **Not on PyPI yet.**
->
-> See [Status & Limitations](#status--limitations) before relying on either.
+> ⚠️ **Alpha software.** v0.3.0 is the current release on [PyPI](https://pypi.org/project/chronicle-ds/). It is stable enough for research and internal pipelines, but APIs may still shift before v1.0. See [Status & Limitations](#status--limitations) before relying on it in production.
 
-### New in v0.3.0-alpha
+### New in v0.3.0
 
 Run-to-run **diff**, a four-step **date confidence ladder**, a **JSON API connector**, `robots.txt` and `Retry-After` support, and fixes for every numeric-handling bug in v0.2.1. [Jump to what's new →](#whats-new)
 
@@ -125,12 +119,90 @@ Five layers, each depending only on the ones below it: **Foundation → Acquisit
 |--------|---------|
 | Stable (v0.3.0) | `pip install chronicle-ds` |
 | JS-rendered pages | `pip install "chronicle-ds[browser]"` then `playwright install chromium` |
-| Latest development | `pip install "git+https://github.com/TheDataNormad/chronicle.git"` |
 | Source development | see [Contributing](#contributing) |
 
 Chronicle requires **Python 3.10+**.
 
-> **Scraping numeric data (prices, ratings, counts)?** Install from git. v0.2.1 on PyPI has [known numeric bugs](#v021-on-pypi).
+---
+
+## Displaying Output
+
+Chronicle returns **DataFrames** (which Jupyter renders as rich tables) and **strings** (which it does not). The correct display form depends on your environment and the type.
+
+### The rule
+
+> **Bare expression when Jupyter has a rich display for the type.
+> `print()` when it does not.**
+
+Jupyter and Colab render certain Python objects as formatted HTML (tables, key/value views). For everything else, they fall back to `repr()` — which shows escaped characters like `\n` literally. `print()` uses `str()` instead and renders newlines properly.
+
+### By return type
+
+| What you have | Jupyter / Colab | Script / Terminal / PowerShell | PyCharm SciView |
+|---------------|-----------------|-------------------------------|-----------------|
+| **DataFrame** (`result.to_dataframe()`) | `result.to_dataframe().head()` | `print(result.to_dataframe().head())` | Bare (SciView renders it) |
+| **String** (`result.drift_report.pretty()`) | `print(result.drift_report.pretty())` | `print(result.drift_report.pretty())` | `print(...)` |
+| **Dict** (`result.quality_report()`) | Bare or `print(...)` | `print(...)` | Bare or `print(...)` |
+| **ScrapeResult** (`result` itself) | Bare: `<ScrapeResult ...>` | `print(result)` | Bare |
+| **Bool** (`result.has_drift()`) | Bare | `print(...)` | Bare |
+
+### Concrete examples
+
+**Jupyter / Colab — DataFrames render as tables:**
+
+```python
+from chronicle import Scrape
+
+result = Scrape("https://en.wikipedia.org/wiki/List_of_most-viewed_YouTube_videos").run()
+
+# Bare expression → rich HTML table
+result.to_dataframe().head(10)
+```
+
+**Jupyter / Colab — strings need `print()`:**
+
+```python
+# ❌ Bare expression — shows repr with literal \n
+result.drift_report.pretty()
+
+# ✅ print() — renders the formatted report
+print(result.drift_report.pretty())
+```
+
+### Drift needs two runs
+
+`.drift_report` is `None` on the first run of a URL — there is no baseline to compare against yet. Guard with `has_drift()`, which is `None`-safe:
+
+```python
+# First run — no baseline
+Scrape(url).run()
+
+# Second run — comparison available
+result = Scrape(url).run()
+
+if result.has_drift():
+    print(result.drift_report.pretty())
+else:
+    print(f"No drift detected. Severity: {result.drift_report.severity}")
+```
+
+Same rule for `.changes`: use `result.has_changes()` before calling `result.changes.pretty()`.
+
+### Colab persistence
+
+Colab wipes its filesystem on every session restart. Point `storage_root` at Google Drive to keep run history across sessions:
+
+```python
+from google.colab import drive
+drive.mount("/content/drive")
+
+result = Scrape(
+    url,
+    storage_root="/content/drive/MyDrive/chronicle",
+).run()
+```
+
+Without this, every Colab session starts fresh — the first run in each session is always a "first run" with no baseline.
 
 ---
 
@@ -200,7 +272,7 @@ Some sites (YouTube, Twitter, LinkedIn) detect headless browsers and serve reduc
 </details>
 
 <details>
-<summary><b>🔌 JSON APIs (v0.3.0)</b></summary>
+<summary><b>🔌 JSON APIs</b></summary>
 
 ```python
 result = Scrape(
@@ -217,7 +289,7 @@ result = Scrape(
 </details>
 
 <details>
-<summary><b>🔁 Changes since the last run (v0.3.0)</b></summary>
+<summary><b>🔁 Changes since the last run</b></summary>
 
 ```python
 result = Scrape(url, selectors={...}, key="title").run()
@@ -232,7 +304,7 @@ Pass `key=` so Chronicle can tell an edited value from a new row. Without it, on
 </details>
 
 <details>
-<summary><b>📅 Dates and the cleaning report (v0.3.0)</b></summary>
+<summary><b>📅 Dates and the cleaning report</b></summary>
 
 `03/04/2026` could be April 3rd or March 4th, and a wrong guess looks valid. A date is converted only when exactly one reading is possible:
 
@@ -331,16 +403,13 @@ Both run automatically on every `Scrape.run()` when a prior run exists. They are
 
 ## What's New
 
-**v0.3.0 (GitHub `main`)**
+**v0.3.0 (Current Release)**
 - 🔁 Run-to-run diff (`result.changes`), keyed and keyless
 - 📅 Date cleaning with a four-step confidence ladder and `result.cleaning`
 - 🔌 JSON connector (`records_path`, `fields`)
 - 🤝 `robots.txt` and `Retry-After` support
-- 🔢 Fixes for all numeric-handling bugs listed under v0.2.1
-- 🧪 147 tests
-
-**v0.2.1 (PyPI)**
-- Versioned storage with SQLite run index, profile generation, drift detection, Playwright fetcher, pydantic schema validation, CLI, cache off by default
+- 🔢 Fixes for all numeric-handling bugs from v0.2.1
+- 🧪 147 tests (84% coverage)
 
 Full history in [CHANGELOG.md](CHANGELOG.md).
 
