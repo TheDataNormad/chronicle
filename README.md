@@ -39,9 +39,7 @@ Run-to-run **diff**, a four-step **date confidence ladder**, a **JSON API connec
 **1. Install** — see [Installation](#installation) for all options.
 
 ```bash
-pip install chronicle-ds        # v0.2.1 (PyPI)
-# or
-pip install "git+https://github.com/TheDataNormad/chronicle.git"   # v0.3.0-alpha
+pip install chronicle-ds
 ```
 
 **2. Scrape a page into a DataFrame**
@@ -125,10 +123,10 @@ Five layers, each depending only on the ones below it: **Foundation → Acquisit
 
 | Option | Command |
 |--------|---------|
-| Stable (v0.2.1) | `pip install chronicle-ds` |
-| Latest (v0.3.0-alpha) | `pip install "git+https://github.com/TheDataNormad/chronicle.git"` |
+| Stable (v0.3.0) | `pip install chronicle-ds` |
 | JS-rendered pages | `pip install "chronicle-ds[browser]"` then `playwright install chromium` |
-| Development | see [Contributing](#contributing) |
+| Latest development | `pip install "git+https://github.com/TheDataNormad/chronicle.git"` |
+| Source development | see [Contributing](#contributing) |
 
 Chronicle requires **Python 3.10+**.
 
@@ -202,7 +200,7 @@ Some sites (YouTube, Twitter, LinkedIn) detect headless browsers and serve reduc
 </details>
 
 <details>
-<summary><b>🔌 JSON APIs (v0.3.0-alpha)</b></summary>
+<summary><b>🔌 JSON APIs (v0.3.0)</b></summary>
 
 ```python
 result = Scrape(
@@ -219,7 +217,7 @@ result = Scrape(
 </details>
 
 <details>
-<summary><b>🔁 Changes since the last run (v0.3.0-alpha)</b></summary>
+<summary><b>🔁 Changes since the last run (v0.3.0)</b></summary>
 
 ```python
 result = Scrape(url, selectors={...}, key="title").run()
@@ -234,7 +232,7 @@ Pass `key=` so Chronicle can tell an edited value from a new row. Without it, on
 </details>
 
 <details>
-<summary><b>📅 Dates and the cleaning report (v0.3.0-alpha)</b></summary>
+<summary><b>📅 Dates and the cleaning report (v0.3.0)</b></summary>
 
 `03/04/2026` could be April 3rd or March 4th, and a wrong guess looks valid. A date is converted only when exactly one reading is possible:
 
@@ -333,7 +331,7 @@ Both run automatically on every `Scrape.run()` when a prior run exists. They are
 
 ## What's New
 
-**v0.3.0-alpha (GitHub `main`)**
+**v0.3.0 (GitHub `main`)**
 - 🔁 Run-to-run diff (`result.changes`), keyed and keyless
 - 📅 Date cleaning with a four-step confidence ladder and `result.cleaning`
 - 🔌 JSON connector (`records_path`, `fields`)
@@ -350,22 +348,7 @@ Full history in [CHANGELOG.md](CHANGELOG.md).
 
 ## Status & Limitations
 
-### v0.2.1 (on PyPI)
-
-<details>
-<summary><b>Numeric handling bugs (fixed in v0.3.0-alpha)</b></summary>
-
-- A numeric column containing `0` or `1` is read as booleans and the whole run fails to save
-- One `N/A` in a numeric column loses the whole run (mixed-type Parquet write fails)
-- `"12,5"` is read as 125; `"2023-05-01"` becomes `2023.0`; `"42.99"` in an `int` field becomes `42`; leading zeros are dropped
-
-**If you scrape prices, ratings, counts, or quantities, install from git.**
-
-</details>
-
-Also: drift blind spots (categorical columns, same-mean distribution shifts, dtype changes), no `robots.txt` or `Retry-After`, no SSRF protection, `?page=N` pagination only, CLI has no `--selectors`, and `test_fetch.py` and `test_profile.py` are empty.
-
-### v0.3.0-alpha (GitHub `main`)
+### Current limitations (v0.3.0)
 
 - **Storage is not fully transactional.** A crash mid-run can leave the run directory and SQLite index inconsistent; no content hashes or orphan recovery
 - **No baseline management.** The baseline is the first successful run until you delete it by hand
@@ -374,11 +357,7 @@ Also: drift blind spots (categorical columns, same-mean distribution shifts, dty
 - **No response-size cap or parse-time limit**
 - **No offline replay API, no async fetcher, thin CLI**
 
-v0.3.0-alpha is tagged but **not published to PyPI** and not recommended for production.
-
----
-
-## Roadmap
+### Roadmap
 
 - [x] HTTP fetcher with retries, rate limits, `robots.txt`, `Retry-After`
 - [x] Playwright fetcher for JS-rendered pages
@@ -387,8 +366,8 @@ v0.3.0-alpha is tagged but **not published to PyPI** and not recommended for pro
 - [x] Schema validation with quarantine
 - [x] Versioned storage, profiles, drift detection
 - [x] Run-to-run diff
-- [ ] **v0.3.0** *(planned)* — drift detector rework (categorical, dtype, same-mean distribution), baseline management, SSRF protection, pagination strategies
-- [ ] **v0.3.x** *(planned)* — transactional storage with run status, content hashes, `chronicle verify`
+- [x] **v0.3.0** — numeric bug fixes, date cleaning, run-to-run diff, JSON connector, `robots.txt` support
+- [ ] **v0.3.x** *(planned)* — drift detector rework (categorical, dtype, same-mean distribution), baseline management, SSRF protection, pagination strategies
 - [ ] **v0.4.0** *(planned)* — storage backend abstraction (local vs. cloud), async fetcher, RAD module
 - [ ] **v0.5.0** *(not yet scheduled)* — data contracts, self-healing selectors
 
